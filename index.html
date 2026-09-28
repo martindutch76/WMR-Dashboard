@@ -61,6 +61,8 @@ tr.unpoolable td.rate,tr.unpoolable td.ci{color:var(--muted)}
 @media (max-width:520px){.mfoot{grid-template-columns:1fr;gap:8px}}
 .close{position:absolute;top:10px;right:12px;border:0;background:transparent;font-size:1.7rem;line-height:1;cursor:pointer;color:var(--muted);padding:4px 8px}
 .close:hover{color:var(--ink)}
+.incHead{display:flex;flex-direction:column;align-items:flex-start;gap:4px;font-weight:600}
+.incHead input{accent-color:var(--accent);width:16px;height:16px}
 .pooled{display:grid;grid-template-columns:repeat(3,1fr);margin-top:16px;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--panel)}
 .pooled .cell{padding:16px 18px}
 .pooled .cell+.cell{border-left:1px solid var(--line)}
@@ -69,7 +71,11 @@ tr.unpoolable td.rate,tr.unpoolable td.ci{color:var(--muted)}
 .pooled .ci2{font-size:.95rem;font-weight:600;min-height:1.4em}
 .pooled .u{font-size:.85rem;color:var(--muted)}
 @media (max-width:640px){.pooled{grid-template-columns:1fr}.pooled .cell+.cell{border-left:0;border-top:1px solid var(--line)}.pooled .h{min-height:0}}
-.status{margin:0 0 14px;color:var(--muted);font-size:.9rem}
+.status{margin:0 0 14px;color:var(--muted);font-size:.9rem;display:flex;align-items:center;gap:9px;min-height:1.4em}
+.spinner{width:15px;height:15px;border-radius:50%;border:2px solid var(--line);border-top-color:var(--accent);animation:spin .7s linear infinite;flex:none}
+.spinner[hidden]{display:none}
+@media (prefers-reduced-motion:reduce){.spinner{animation-duration:1.4s}}
+@keyframes spin{to{transform:rotate(360deg)}}
 .status:empty{display:none}
 .status.err{color:#b3261e;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px 14px}
 .filterwrap{margin:0}
@@ -124,7 +130,7 @@ input[type=file]{font:inherit;max-width:100%}
 <main>
   <h1>Incidence explorer</h1>
   <p class="sub">Filter incident HIV, HBV and HCV rates by nation and study period.</p>
-  <p class="status" id="status" role="status">Loading data…</p>
+  <p class="status" id="status" role="status"><span class="spinner" id="spinner" aria-hidden="true"></span><span id="statustext">Loading data…</span></p>
 
   <div class="filterwrap">
     <button type="button" class="fbar" id="ftoggle" aria-expanded="false" aria-controls="fpanel">
@@ -161,14 +167,14 @@ input[type=file]{font:inherit;max-width:100%}
   </div>
 
   <div class="count" aria-live="polite">
-    <strong id="n">0</strong><span class="t" id="ntext">rows match</span>
+    <strong id="n">0</strong><span class="t" id="ntext">Populations Found</span>
   </div>
 
   <section class="panel tablewrap">
     <table>
       <thead>
         <tr>
-          <th style="width:64px">Include</th>
+          <th style="width:64px"><span class="incHead">Include<br><input type="checkbox" id="incAll" checked title="Toggle all eligible studies on or off" aria-label="Toggle all eligible studies on or off"></span></th>
           <th>Study period</th>
           <th>Population</th>
           <th class="num">Rate per 100 PY</th>
@@ -272,21 +278,22 @@ function normalise(rows){
   });
   data=all.filter(d=>d.start!==null);
   const noYear=all.length-data.length;
-  const st=$("status"); st.classList.remove("err");
-  st.textContent = noYear ? `${noYear.toLocaleString()} of ${all.length.toLocaleString()} rows have no study year and are left out of the year filter.` : "";
-  if(!data.length){ st.textContent="Connected, but no rows with a study year were returned."; st.classList.add("err"); return; }
+  const st=$("status"), stt=$("statustext"); st.classList.remove("err"); $("spinner").hidden=true;
+  stt.textContent = noYear ? `${noYear.toLocaleString()} of ${all.length.toLocaleString()} rows have no study year and are left out of the year filter.` : "";
+  if(!data.length){ stt.textContent="Connected, but no rows with a study year were returned."; st.classList.add("err"); return; }
   setupControls();
 }
 
 async function boot(){
-  const st=$("status");
+  const st=$("status"), stt=$("statustext"), sp=$("spinner");
   if(SUPABASE_URL.includes("YOUR-PROJECT-REF")||SUPABASE_KEY.startsWith("YOUR-")||!SUPABASE_URL||!SUPABASE_KEY){
-    st.textContent="Add your Supabase URL and public key at the top of the script (SUPABASE_URL and SUPABASE_KEY).";
+    sp.hidden=true; stt.textContent="Add your Supabase URL and public key at the top of the script (SUPABASE_URL and SUPABASE_KEY).";
     st.classList.add("err"); return;
   }
+  sp.hidden=false; stt.textContent="Loading population data…";
   try{ normalise(await fetchAll()); }
   catch(e){
-    st.textContent="Could not load data from Supabase ("+e.message+"). Check the URL and key, that the view exists, and that the anon role can read it.";
+    sp.hidden=true; stt.textContent="Could not load data from Supabase ("+e.message+"). Check the URL and key, that the view exists, and that the anon role can read it.";
     st.classList.add("err");
   }
 }
@@ -333,13 +340,12 @@ function update(resetSample){
   const rsel=selectedRisks();
   const matches=data.filter(d=>(nat==="__all"||d.nation===nat) && d.virus===virus && d.start<=b && d.end>=a &&
                     (!rsel.length || d.cats.some(c=>rsel.includes(c))))
-                    .sort((x,y)=>x.start-y.start||x.end-y.end);
+                    .sort((x,y)=>y.start-x.start||y.end-x.end);
   window._matches=matches;
   const rl=rsel.length===0?"all risk groups":rsel.length===1?RISKS.find(r=>r[0]===rsel[0])[1]:rsel.length+" risk groups";
   $("fsum").textContent=(nat==="__all"?"All nations":nat)+", "+a+"–"+b+", "+rl;
   $("n").textContent=matches.length.toLocaleString();
-  $("ntext").textContent=(matches.length===1?"row matches":"rows match")+
-    (matches.length>MAX?" — showing "+MAX:"");
+  $("ntext").textContent="Populations Found"+(matches.length>MAX?" — showing "+MAX:"");
   shown = matches.slice(0,MAX);
   render();
 }
@@ -418,8 +424,19 @@ function render(){
       <td>${whisker(d,max)}</td>
     </tr>`).join("");
   pool(shown);
+  syncIncAll();
   fitScroll();
   document.querySelector(".tablewrap").scrollTop=0;
+}
+
+function syncIncAll(){
+  const box=$("incAll"); if(!box) return;
+  const eligible=(shown||[]).filter(d=>d.poolable);
+  if(!eligible.length){ box.checked=true; box.indeterminate=false; box.disabled=true; return; }
+  box.disabled=false;
+  const n=eligible.filter(d=>d.tick).length;
+  box.checked = n===eligible.length;
+  box.indeterminate = n>0 && n<eligible.length;
 }
 
 function fitScroll(){
@@ -469,6 +486,12 @@ $("rows").addEventListener("change",e=>{
   shown[+cb.dataset.i].tick=cb.checked;
   cb.closest("tr").classList.toggle("off",!cb.checked);
   pool(shown);
+  syncIncAll();
+});
+$("incAll").addEventListener("change",()=>{
+  const on=$("incAll").checked;
+  (shown||[]).forEach(d=>{ if(d.poolable) d.tick=on; });
+  render();
 });
 $("rows").addEventListener("click",e=>{const b=e.target.closest(".info"); if(b) openInfo(+b.dataset.i,b);});
 $("mclose").addEventListener("click",closeInfo);
