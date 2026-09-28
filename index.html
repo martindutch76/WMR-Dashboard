@@ -368,20 +368,131 @@ function poissonCI(c){ // mean count bounds for observed count c
   const upper=solve(m=>gammaP(c+1,m)-0.975,hi);
   return [lower,upper];}
 
+/* ---------- Random-effects Poisson-Normal GLMM (one-stage meta-analysis) ----------
+   log(rate_i) = mu + u_i,  u_i ~ N(0, tau^2),  cases_i ~ Poisson(rate_i * person_years_i)
+   Marginal likelihood per study integrated over u by 10-point Gauss-Hermite quadrature.
+   mu and tau are fitted by maximum likelihood (Nelder-Mead); the 95% CI for mu comes
+   from the inverse of the numerical Hessian of the negative log-likelihood at the MLE. */
+const GH10 = [
+  [0.342901327223705,0.610862633735325], [-0.342901327223705,0.610862633735325],
+  [1.036610829789514,0.240138611082314], [-1.036610829789514,0.240138611082314],
+  [1.756683649299882,0.033874394455481], [-1.756683649299882,0.033874394455481],
+  [2.532731674232790,0.001343645746781], [-2.532731674232790,0.001343645746781],
+  [3.436159118837738,0.000007640432855], [-3.436159118837738,0.000007640432855]
+];
+function logsumexp(arr){
+  const m=Math.max(...arr);
+  if(!isFinite(m)) return m;
+  let s=0; for(const v of arr) s+=Math.exp(v-m);
+  return m+Math.log(s);
+}
+function studyLogLik(mu,tau,r,t){
+  const logs=[];
+  for(const [x,w] of GH10){
+    const logLambda=Math.max(-30,Math.min(10,mu+Math.SQRT2*tau*x));
+    const logm=Math.log(t)+logLambda, m=Math.exp(logm);
+    logs.push(Math.log(w)-0.5*Math.log(Math.PI) + (-m + r*logm - lgam(r+1)));
+  }
+  return logsumexp(logs);
+}
+function glmmNegLL(params, studies){
+  const mu=params[0], tau=Math.exp(Math.max(-25,Math.min(8,params[1])));
+  let tot=0;
+  for(const s of studies){ const ll=studyLogLik(mu,tau,s.r,s.t); tot += isFinite(ll)?ll:-1e10; }
+  return -tot;
+}
+function nelderMead2D(f, x0, opts={}){
+  const maxIter=opts.maxIter||600, tol=opts.tol||1e-11, step=opts.step||[0.5,0.5];
+  let simplex=[x0.slice(),[x0[0]+step[0],x0[1]],[x0[0],x0[1]+step[1]]], fvals=simplex.map(f);
+  for(let iter=0; iter<maxIter; iter++){
+    const idx=[0,1,2].sort((a,b)=>fvals[a]-fvals[b]);
+    simplex=idx.map(i=>simplex[i]); fvals=idx.map(i=>fvals[i]);
+    if(Math.abs(fvals[2]-fvals[0])<tol) break;
+    const cen=[(simplex[0][0]+simplex[1][0])/2,(simplex[0][1]+simplex[1][1])/2];
+    const xr=[cen[0]+(cen[0]-simplex[2][0]),cen[1]+(cen[1]-simplex[2][1])], fr=f(xr);
+    if(fr<fvals[0]){
+      const xe=[cen[0]+2*(xr[0]-cen[0]),cen[1]+2*(xr[1]-cen[1])], fe=f(xe);
+      if(fe<fr){simplex[2]=xe;fvals[2]=fe;} else {simplex[2]=xr;fvals[2]=fr;}
+    } else if(fr<fvals[1]){ simplex[2]=xr; fvals[2]=fr; }
+    else {
+      const xc=[cen[0]+0.5*(simplex[2][0]-cen[0]),cen[1]+0.5*(simplex[2][1]-cen[1])], fc=f(xc);
+      if(fc<fvals[2]){ simplex[2]=xc; fvals[2]=fc; }
+      else for(let i=1;i<3;i++){
+        simplex[i]=[simplex[0][0]+0.5*(simplex[i][0]-simplex[0][0]),simplex[0][1]+0.5*(simplex[i][1]-simplex[0][1])];
+        fvals[i]=f(simplex[i]);
+      }
+    }
+  }
+  const idx=[0,1,2].sort((a,b)=>fvals[a]-fvals[b]);
+  return {x:simplex[idx[0]], f:fvals[idx[0]]};
+}
+function fitPoissonNormalGLMM(studies){
+  const totC=studies.reduce((a,s)=>a+s.r,0), totT=studies.reduce((a,s)=>a+s.t,0);
+  const mu0=totC>0?Math.log(totC/totT):Math.log(0.5/totT);
+  let best=null;
+  for(const lt of [-3,-1.5,-0.3,1]){
+    const res=nelderMead2D(p=>glmmNegLL(p,studies), [mu0,lt], {step:[0.3,0.7]});
+    if(!best||res.f<best.f) best=res;
+  }
+  const [muHat,logTauHat]=best.x, tauHat=Math.exp(Math.max(-25,Math.min(8,logTauHat)));
+  const h1=Math.max(1e-3,Math.abs(muHat)*1e-3+1e-3), h2=Math.max(1e-3,Math.abs(logTauHat)*1e-3+1e-3);
+  const f=p=>glmmNegLL(p,studies);
+  const F00=f([muHat,logTauHat]);
+  const Fp0=f([muHat+h1,logTauHat]), Fm0=f([muHat-h1,logTauHat]);
+  const F0p=f([muHat,logTauHat+h2]), F0m=f([muHat,logTauHat-h2]);
+  const Fpp=f([muHat+h1,logTauHat+h2]), Fpm=f([muHat+h1,logTauHat-h2]);
+  const Fmp=f([muHat-h1,logTauHat+h2]), Fmm=f([muHat-h1,logTauHat-h2]);
+  const H11=(Fp0-2*F00+Fm0)/(h1*h1), H22=(F0p-2*F00+F0m)/(h2*h2), H12=(Fpp-Fpm-Fmp+Fmm)/(4*h1*h2);
+  const det=H11*H22-H12*H12;
+  let varMu=null;
+  if(det>1e-10 && H11>0) varMu=H22/det; else if(H11>0) varMu=1/H11;
+  const seMu=(varMu!=null && isFinite(varMu) && varMu>=0)?Math.sqrt(varMu):null;
+  return {mu:muHat, tau:tauHat, se:seMu};
+}
+/* Fits the GLMM (2+ ticked studies with events), falls back to an exact Poisson
+   interval on the pooled sum when there's only one study, no events, or the
+   model's uncertainty can't be estimated numerically. */
+function fitPooledIncidence(ok){
+  const c=ok.reduce((t,d)=>t+d.cases,0), p=ok.reduce((t,d)=>t+d.py,0);
+  if(ok.length<2 || c===0){
+    const [l,u]=poissonCI(c);
+    return {rate:c/p*100, lo:l/p*100, hi:u/p*100, tau:null,
+      method: ok.length<2 ? "single study" : "zero events across ticked studies"};
+  }
+  const fit=fitPoissonNormalGLMM(ok.map(d=>({r:d.cases,t:d.py})));
+  if(fit.se===null){
+    const [l,u]=poissonCI(c);
+    return {rate:c/p*100, lo:l/p*100, hi:u/p*100, tau:fit.tau, method:"fallback (model uncertainty could not be estimated)"};
+  }
+  return {
+    rate:Math.exp(fit.mu)*100,
+    lo:Math.exp(fit.mu-1.96*fit.se)*100,
+    hi:Math.exp(fit.mu+1.96*fit.se)*100,
+    tau:fit.tau, method:"glmm"
+  };
+}
+
 function pool(rows){
   const ticked=rows.filter(d=>d.tick && d.poolable);
   const ok=ticked.filter(d=>d.cases!==null&&d.py!==null&&d.py>0);
   const c=ok.reduce((t,d)=>t+d.cases,0), p=ok.reduce((t,d)=>t+d.py,0);
   const has=ok.length>0;
-  $("pi").textContent=has?fmt(c/p*100):"–";
-  if(has){const [l,u]=poissonCI(c); $("pci").textContent="95% CI "+fmt(l/p*100)+" to "+fmt(u/p*100);}
-  else $("pci").textContent="";
   $("pc").textContent=has?Math.round(c).toLocaleString():"–";
   $("pp").textContent=has?Math.round(p).toLocaleString():"–";
-  $("pnote").textContent=!rows.length?"No studies displayed, so nothing to pool."
-    :!ticked.length?"No studies are ticked. Tick at least one study to pool."
-    :!has?"The ticked studies have no incident cases and person-years values, so nothing can be pooled."
-    :`Pooled from ${ok.length} ticked of ${rows.length} displayed ${rows.length===1?"study":"studies"}`+(ok.length<ticked.length?" (ticked studies missing cases or person-years are left out)":"")+". Pooled incidence = total cases ÷ total person-years × 100, with an exact Poisson 95% CI that treats the pooled cases as a single count.";
+  if(!has){
+    $("pi").textContent="–"; $("pci").textContent="";
+    $("pnote").textContent=!rows.length?"No studies displayed, so nothing to pool."
+      :!ticked.length?"No studies are ticked. Tick at least one study to pool."
+      :"The ticked studies have no incident cases and person-years values, so nothing can be pooled.";
+    return;
+  }
+  const fit=fitPooledIncidence(ok);
+  $("pi").textContent=fmt(fit.rate);
+  $("pci").textContent="95% CI "+fmt(fit.lo)+" to "+fmt(fit.hi);
+  const base=`Meta-analysed from ${ok.length} ticked of ${rows.length} displayed ${rows.length===1?"study":"studies"} by a random-effects Poisson GLMM (incident cases and observation years shown are simple totals, unchanged).`;
+  const tauNote = fit.tau!==null ? ` Between-study SD on the log-rate scale (τ): ${fit.tau.toFixed(3)}.` : "";
+  const flag = fit.method!=="glmm" ? ` Interval shown is an exact Poisson interval on the pooled total instead (${fit.method}).` : "";
+  $("pnote").textContent=base+tauNote+flag+(ok.length<ticked.length?" Ticked studies missing cases or person-years are left out of both the GLMM and the totals.":"");
 }
 
 /* ---------- render ---------- */
