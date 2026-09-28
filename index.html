@@ -154,7 +154,7 @@ input[type=file]{font:inherit;max-width:100%}
     <fieldset class="risks">
       <legend>Population risk group (TSANZ)</legend>
       <div class="rgrid" id="rgrid"></div>
-      <p class="hint" id="rhint">Nothing ticked shows every group. Ticking “General population” clears the risk groups, and ticking a risk group clears “General population”.</p>
+      <p class="hint" id="rhint">Nothing ticked shows every group. Ticking more than one risk group returns only studies identified with ALL of them (e.g. MSM + injecting drug use returns studies flagged as both, not either). Ticking “General population” clears the risk groups, and ticking a risk group clears “General population”.</p>
     </fieldset>
   </section>
     </div></div>
@@ -339,10 +339,10 @@ function update(resetSample){
   const nat=$("nation").value;
   const rsel=selectedRisks();
   const matches=data.filter(d=>(nat==="__all"||d.nation===nat) && d.virus===virus && d.start<=b && d.end>=a &&
-                    (!rsel.length || d.cats.some(c=>rsel.includes(c))))
+                    (!rsel.length || rsel.every(c=>d.cats.includes(c))))
                     .sort((x,y)=>y.start-x.start||y.end-x.end);
   window._matches=matches;
-  const rl=rsel.length===0?"all risk groups":rsel.length===1?RISKS.find(r=>r[0]===rsel[0])[1]:rsel.length+" risk groups";
+  const rl=rsel.length===0?"all risk groups":rsel.map(id=>RISKS.find(r=>r[0]===id)[1]).join(" and ");
   $("fsum").textContent=(nat==="__all"?"All nations":nat)+", "+a+"–"+b+", "+rl;
   $("n").textContent=matches.length.toLocaleString();
   $("ntext").textContent="Populations Found"+(matches.length>MAX?" — showing "+MAX:"");
