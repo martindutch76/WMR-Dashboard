@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Incidence explorer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#eef2f5; --panel:#ffffff; --ink:#15222e; --muted:#5d6f7e; --line:#d5dde4;
+  --accent:#12607a; --accent-soft:#d9ecf2; --whisker:#12607a; --warn:#8a5a00; --warn-bg:#fff3d6;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#0f1a22; --panel:#17252f; --ink:#e6eef3; --muted:#93a6b4; --line:#2b3d4a;
+    --accent:#58b8d3; --accent-soft:#1d3a47; --whisker:#58b8d3; --warn:#f0c66a; --warn-bg:#3a2f14;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0f1a22; --panel:#17252f; --ink:#e6eef3; --muted:#93a6b4; --line:#2b3d4a;
+  --accent:#58b8d3; --accent-soft:#1d3a47; --whisker:#58b8d3; --warn:#f0c66a; --warn-bg:#3a2f14;
+}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 15px/1.5 "Public Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-variant-numeric:tabular-nums}
+main{max-width:1000px;margin:0 auto;padding:28px 18px 60px}
+h1{font-size:1.5rem;font-weight:700;margin:0 0 4px;letter-spacing:-.01em}
+.sub{color:var(--muted);margin:0 0 22px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px}
+.controls{display:grid;grid-template-columns:minmax(180px,1fr) 2fr;gap:22px;align-items:start}
+@media (max-width:640px){.controls{grid-template-columns:1fr}}
+label,.lbl{display:block;font-weight:600;font-size:.9rem;margin-bottom:6px}
+select,button{font:inherit;color:var(--ink)}
+select{width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:6px;background:var(--bg)}
+.sliders{display:grid;gap:14px}
+.srow{display:grid;grid-template-columns:90px 1fr 48px;gap:10px;align-items:center}
+.srow span.n{font-weight:600;text-align:right}
+input[type=range]{width:100%;accent-color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.inc{width:18px;height:18px;accent-color:var(--accent);cursor:pointer}
+tr.off td:not(:first-child){opacity:.45}
+.info{border:0;background:transparent;color:var(--accent);padding:0 2px;margin-left:4px;cursor:pointer;vertical-align:middle;line-height:0;border-radius:50%}
+.info:hover{color:var(--ink)}
+.overlay{position:fixed;inset:0;background:rgba(10,20,28,.55);display:flex;align-items:center;justify-content:center;padding:16px;z-index:50}
+.overlay[hidden]{display:none}
+.modal{position:relative;background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:12px;width:min(680px,100%);max-height:calc(100% - 8px);display:flex;flex-direction:column;padding:22px 22px 0;overflow:hidden}
+.modal h2{font-size:1.15rem;line-height:1.35;margin:0 34px 6px 0}
+.modal .authors{color:var(--muted);margin:0 0 14px;font-size:.92rem}
+.modal .lbl{margin-bottom:4px}
+.abstract{flex:1 1 auto;min-height:90px;max-height:45vh;overflow-y:auto;border:1px solid var(--line);border-radius:8px;padding:12px 14px;background:var(--bg);font-size:.93rem;line-height:1.6;white-space:pre-wrap}
+.mfoot{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:16px -22px 0;padding:14px 22px;border-top:1px solid var(--line);background:var(--accent-soft)}
+.mfoot .k{font-size:.8rem;color:var(--muted);font-weight:600}
+.mfoot .val{font-size:1.15rem;font-weight:700}
+.mfoot .val small{font-weight:500;color:var(--muted);font-size:.8rem}
+@media (max-width:520px){.mfoot{grid-template-columns:1fr;gap:8px}}
+.close{position:absolute;top:10px;right:12px;border:0;background:transparent;font-size:1.7rem;line-height:1;cursor:pointer;color:var(--muted);padding:4px 8px}
+.close:hover{color:var(--ink)}
+.pooled{display:grid;grid-template-columns:repeat(3,1fr);margin-top:16px;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--panel)}
+.pooled .cell{padding:16px 18px}
+.pooled .cell+.cell{border-left:1px solid var(--line)}
+.pooled .h{font-weight:600;font-size:.9rem;color:var(--muted);min-height:2.7em}
+.pooled .v{font-size:1.9rem;font-weight:700;color:var(--accent);line-height:1.2;margin-top:2px}
+.pooled .ci2{font-size:.95rem;font-weight:600;min-height:1.4em}
+.pooled .u{font-size:.85rem;color:var(--muted)}
+@media (max-width:640px){.pooled{grid-template-columns:1fr}.pooled .cell+.cell{border-left:0;border-top:1px solid var(--line)}.pooled .h{min-height:0}}
+.status{margin:0 0 14px;color:var(--muted);font-size:.9rem}
+.status:empty{display:none}
+.status.err{color:#b3261e;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px 14px}
+.filterwrap{margin:0}
+.fbar{width:100%;display:flex;align-items:center;gap:10px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:9px 14px;cursor:pointer;text-align:left}
+.fbar:hover{border-color:var(--accent)}
+.fbar svg{flex:none;color:var(--accent)}
+.fbar .ftitle{font-weight:700}
+.fbar .fsum{color:var(--muted);font-size:.9rem;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fbar .chev{transition:transform .25s}
+.fbar[aria-expanded="true"] .chev{transform:rotate(180deg)}
+.fbody{display:grid;grid-template-rows:0fr;transition:grid-template-rows .25s ease}
+.fbody.open{grid-template-rows:1fr}
+.finner{min-height:0;overflow:hidden;visibility:hidden;transition:visibility 0s .25s}
+.fbody.open .finner{visibility:visible;transition:visibility 0s}
+.fbody .panel{margin-top:8px}
+@media (prefers-reduced-motion:reduce){.fbody,.fbar .chev{transition:none}.finner{transition:none}}
+.virusbar{display:grid;grid-template-columns:repeat(3,1fr);margin-top:16px;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--panel)}
+.virusbar button{border:0;background:transparent;padding:14px 8px;font-size:1.15rem;font-weight:700;letter-spacing:.02em;cursor:pointer;color:var(--muted)}
+.virusbar button+button{border-left:1px solid var(--line)}
+.virusbar button:hover{background:var(--accent-soft);color:var(--ink)}
+.virusbar button[aria-selected="true"]{background:var(--accent);color:#fff}
+.count{display:flex;align-items:baseline;gap:10px;margin:22px 2px 10px;flex-wrap:wrap}
+.count strong{font-size:2.4rem;font-weight:700;line-height:1;color:var(--accent)}
+.count .t{color:var(--muted)}
+.tablewrap{overflow:auto;padding:0}
+table{width:100%;border-collapse:collapse;min-width:640px}
+th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:middle}
+th{font-size:.82rem;font-weight:600;color:var(--muted);position:sticky;top:0;z-index:2;background:var(--panel);box-shadow:0 1px 0 var(--line)}
+td.num,th.num{text-align:right}
+tbody tr:last-child td{border-bottom:0}
+.rate{font-weight:700}
+.ci{color:var(--muted);white-space:nowrap}
+svg.w{display:block;width:100%;min-width:130px;height:18px}
+.risks{border:0;border-top:1px solid var(--line);margin:18px 0 0;padding:14px 0 0}
+.risks legend{font-weight:600;font-size:.9rem;padding:0 8px 0 0;float:left;width:100%;margin-bottom:8px}
+.rgrid{clear:both;display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:8px 16px}
+.rgrid label{display:flex;gap:8px;align-items:flex-start;font-weight:400;margin:0;cursor:pointer}
+.rgrid input{margin-top:4px;accent-color:var(--accent)}
+.rgrid .gen{grid-column:1/-1;padding-top:8px;border-top:1px dashed var(--line);font-weight:600}
+.rgrid .gen span{font-weight:600}
+.axis{display:flex;justify-content:space-between;font-weight:500;color:var(--muted);border-top:1px solid var(--line);margin-top:3px;padding-top:2px}
+.empty{padding:30px 12px;text-align:center;color:var(--muted)}
+details{margin-top:18px}
+summary{cursor:pointer;color:var(--muted);font-size:.9rem}
+.map{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-top:12px}
+.load{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:12px}
+input[type=file]{font:inherit;max-width:100%}
+.hint{color:var(--muted);font-size:.85rem;margin-top:8px}
+</style>
+</head>
+<body>
+<main>
+  <h1>Incidence explorer</h1>
+  <p class="sub">Filter incident HIV, HBV and HCV rates by nation and study period.</p>
+  <p class="status" id="status" role="status">Loading data…</p>
+
+  <div class="filterwrap">
+    <button type="button" class="fbar" id="ftoggle" aria-expanded="false" aria-controls="fpanel">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      <span class="ftitle">Filters</span>
+      <span class="fsum" id="fsum"></span>
+      <svg class="chev" viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 7.5l5 5 5-5"/></svg>
+    </button>
+    <div class="fbody" id="fpanel"><div class="finner">
+  <section class="panel">
+    <div class="controls">
+      <div>
+        <label for="nation">Nation</label>
+        <select id="nation"></select>
+      </div>
+      <div class="sliders">
+        <div class="srow"><label for="ys" style="margin:0">Start year</label><input type="range" id="ys"><span class="n" id="ysv"></span></div>
+        <div class="srow"><label for="ye" style="margin:0">End year</label><input type="range" id="ye"><span class="n" id="yev"></span></div>
+      </div>
+    </div>
+    <fieldset class="risks">
+      <legend>Population risk group (TSANZ)</legend>
+      <div class="rgrid" id="rgrid"></div>
+      <p class="hint" id="rhint">Nothing ticked shows every group. Ticking “General population” clears the risk groups, and ticking a risk group clears “General population”.</p>
+    </fieldset>
+  </section>
+    </div></div>
+  </div>
+
+  <div class="virusbar" role="tablist" aria-label="Virus">
+    <button type="button" role="tab" aria-selected="true" data-virus="HBV">HBV</button>
+    <button type="button" role="tab" aria-selected="false" data-virus="HCV">HCV</button>
+    <button type="button" role="tab" aria-selected="false" data-virus="HIV">HIV</button>
+  </div>
+
+  <div class="count" aria-live="polite">
+    <strong id="n">0</strong><span class="t" id="ntext">rows match</span>
+  </div>
+
+  <section class="panel tablewrap">
+    <table>
+      <thead>
+        <tr>
+          <th style="width:64px">Include</th>
+          <th>Study period</th>
+          <th>Population</th>
+          <th class="num">Rate per 100 PY</th>
+          <th class="num">95% CI</th>
+          <th aria-label="Interval plot" style="min-width:150px">Interval
+            <div class="axis"><span>0</span><span id="axmax"></span></div>
+          </th>
+        </tr>
+      </thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </section>
+
+  <section class="pooled" aria-live="polite">
+    <div class="cell"><div class="h">Pooled Incidence</div><div class="v" id="pi">–</div><div class="ci2" id="pci"></div><div class="u">per 100 person-years</div></div>
+    <div class="cell"><div class="h">Pooled Incident Cases</div><div class="v" id="pc">–</div><div class="u">new infections</div></div>
+    <div class="cell"><div class="h">Pooled Observation Period (Person Years)</div><div class="v" id="pp">–</div><div class="u">person-years</div></div>
+  </section>
+  <p class="hint" id="pnote"></p>
+</main>
+
+<div id="overlay" class="overlay" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="mtitle">
+    <button type="button" class="close" id="mclose" aria-label="Close">&times;</button>
+    <h2 id="mtitle"></h2>
+    <p class="authors" id="mauthors"></p>
+    <div class="lbl">Abstract</div>
+    <div class="abstract" id="mabstract" tabindex="0"></div>
+    <div class="mfoot">
+      <div><div class="k">Incidence rate</div><div class="val" id="mrate"></div></div>
+      <div><div class="k">Incident count</div><div class="val" id="mcases"></div></div>
+      <div><div class="k">Person-years of observation</div><div class="val" id="mpy"></div></div>
+    </div>
+  </div>
+</div>
+<script>
+/* ---------- Supabase connection: edit these two values ---------- */
+const SUPABASE_URL = "https://YOUR-PROJECT-REF.supabase.co";
+const SUPABASE_KEY = "YOUR-ANON-OR-PUBLISHABLE-KEY"; // public key only. NEVER the service_role / secret key.
+const SOURCE = "incidence_dashboard";                // read-only view created by supabase_setup.sql
+const PAGE = 1000;                                   // Supabase returns at most 1000 rows per request
+
+/* ---------- state ---------- */
+const MAX=100;   // never load more than this many rows into the table
+const VISIBLE=6; // rows visible before the table scrolls
+let data = [];          // normalised rows
+let shown = null;       // currently displayed rows
+const $ = id => document.getElementById(id);
+
+async function fetchAll(){
+  const headers={apikey:SUPABASE_KEY,"Range-Unit":"items"};
+  if(SUPABASE_KEY.startsWith("eyJ")) headers.Authorization="Bearer "+SUPABASE_KEY; // legacy JWT anon keys only
+  const rows=[];
+  for(let from=0;;from+=PAGE){
+    const res=await fetch(`${SUPABASE_URL}/rest/v1/${SOURCE}?select=*&order=source_id.asc`,
+      {headers:{...headers,Range:`${from}-${from+PAGE-1}`}});
+    if(res.status===416) break;                    // past the last row
+    if(!res.ok){
+      let detail=""; try{detail=(await res.json()).message||"";}catch(e){}
+      throw new Error(`HTTP ${res.status}${detail?": "+detail:""}`);
+    }
+    const batch=await res.json();
+    rows.push(...batch);
+    if(batch.length<PAGE) break;
+  }
+  return rows;
+}
+
+/* ---------- normalise ---------- */
+const num = v => { const x=parseFloat(String(v).replace(/[^\d.\-eE]/g,"")); return isFinite(x)?x:null; };
+
+// [id, label, column in incidence_clean]
+const RISKS=[
+  ["idu","Injecting drug use","tsanz_2_injecting_drug_use"],
+  ["msm","Men who have sex with men","tsanz_3_msm"],
+  ["inc","Incarceration","tsanz_4_incarceration"],
+  ["sw","Prostitution","tsanz_5_prostitution"],
+  ["partner","Sexual partner of increased-risk person","tsanz_6_partner_of_increased_risk"],
+  ["sti","Recent STI","tsanz_7_recent_sti"],
+  ["infant","Infant of increased-risk mother","tsanz_8_infant_of_increased_risk_mother"],
+  ["bf","Breastfed by increased-risk mother","tsanz_9_breastfed_by_increased_risk_mother"],
+  ["gen","General population (average citizen)","tsanz_10_average_citizen"]
+];
+let virus="HBV";
+
+function normalise(rows){
+  const all=rows.map(r=>{
+    const y=(r.study_year===null||r.study_year===undefined)?null:Number(r.study_year);
+    return {
+      nation:(r.nation||"").trim(),
+      start:Number.isFinite(y)?y:null, end:Number.isFinite(y)?y:null,
+      pop:r.population||"",
+      title:r.title||"", authors:r.authors||"", abstract:r.abstract||"",
+      tick:true,
+      cats:RISKS.filter(k=>r[k[2]]===true).map(k=>k[0]),
+      virus:String(r.virus||"").trim().toUpperCase(),
+      cases:num(r.incident_cases_n), py:num(r.observation_person_years),
+      rate:num(r.rate_per_100py), lo:num(r.ci_lower_per_100py), hi:num(r.ci_upper_per_100py)
+    };
+  });
+  data=all.filter(d=>d.start!==null);
+  const noYear=all.length-data.length;
+  const st=$("status"); st.classList.remove("err");
+  st.textContent = noYear ? `${noYear.toLocaleString()} of ${all.length.toLocaleString()} rows have no study year and are left out of the year filter.` : "";
+  if(!data.length){ st.textContent="Connected, but no rows with a study year were returned."; st.classList.add("err"); return; }
+  setupControls();
+}
+
+async function boot(){
+  const st=$("status");
+  if(SUPABASE_URL.includes("YOUR-PROJECT-REF")||SUPABASE_KEY.startsWith("YOUR-")){
+    st.textContent="Add your Supabase URL and public key at the top of the script (SUPABASE_URL and SUPABASE_KEY).";
+    st.classList.add("err"); return;
+  }
+  try{ normalise(await fetchAll()); }
+  catch(e){
+    st.textContent="Could not load data from Supabase ("+e.message+"). Check the URL and key, that the view exists, and that the anon role can read it.";
+    st.classList.add("err");
+  }
+}
+
+function buildRisks(){
+  const grid=$("rgrid");
+  grid.innerHTML=RISKS.map(([id,label])=>
+    `<label${id==="gen"?' class="gen"':""}><input type="checkbox" value="${id}"><span>${label}</span></label>`).join("");
+  grid.querySelectorAll("input").forEach(cb=>cb.addEventListener("change",()=>{
+    if(cb.checked){
+      grid.querySelectorAll("input").forEach(o=>{
+        if(o!==cb && ((cb.value==="gen")||(o.value==="gen"))) o.checked=false;
+      });
+    }
+    update();
+  }));
+}
+const selectedRisks=()=>[...document.querySelectorAll("#rgrid input:checked")].map(c=>c.value);
+
+/* ---------- controls ---------- */
+function setupControls(){
+  const prev=$("nation").value;
+  const nations=[...new Set(data.map(d=>d.nation).filter(Boolean))].sort();
+  const sel=$("nation"); sel.innerHTML="";
+  const add=(v,t)=>{const o=document.createElement("option");o.value=v;o.textContent=t;sel.appendChild(o);};
+  add("__all","All nations");
+  nations.forEach(n=>add(n,n));
+  sel.value = nations.includes(prev)?prev : nations.includes("Australia")?"Australia":"__all";
+
+  const ys=data.map(d=>d.start), ye=data.map(d=>d.end);
+  const lo=Math.min(...ys,...ye), hi=Math.max(...ys,...ye);
+  [$("ys"),$("ye")].forEach(el=>{el.min=lo;el.max=hi;});
+  $("ys").value=lo; $("ye").value=hi;
+  update(true);
+}
+
+function update(resetSample){
+  let a=+$("ys").value, b=+$("ye").value;
+  const changed=document.activeElement;
+  if(a>b){ if(changed===$("ye")) a=b; else b=a; $("ys").value=a; $("ye").value=b; }
+  $("ysv").textContent=a; $("yev").textContent=b;
+
+  const nat=$("nation").value;
+  const rsel=selectedRisks();
+  const matches=data.filter(d=>(nat==="__all"||d.nation===nat) && d.virus===virus && d.start<=b && d.end>=a &&
+                    (!rsel.length || d.cats.some(c=>rsel.includes(c))))
+                    .sort((x,y)=>x.start-y.start||x.end-y.end);
+  window._matches=matches;
+  const rl=rsel.length===0?"all risk groups":rsel.length===1?RISKS.find(r=>r[0]===rsel[0])[1]:rsel.length+" risk groups";
+  $("fsum").textContent=(nat==="__all"?"All nations":nat)+", "+a+"–"+b+", "+rl;
+  $("n").textContent=matches.length.toLocaleString();
+  $("ntext").textContent=(matches.length===1?"row matches":"rows match")+
+    (matches.length>MAX?" — showing "+MAX:"");
+  shown = matches.slice(0,MAX);
+  render();
+}
+
+/* ---------- exact (Garwood) Poisson 95% CI ---------- */
+function lgam(z){const c=[76.18009172947146,-86.50532032941677,24.01409824083091,-1.231739572450155,0.1208650973866179e-2,-0.5395239384953e-5];
+  let y=z,x=z,t=x+5.5; t-=(x+.5)*Math.log(t); let ser=1.000000000190015; for(let j=0;j<6;j++) ser+=c[j]/++y;
+  return -t+Math.log(2.5066282746310005*ser/x);}
+function gammaP(a,x){ // regularised lower incomplete gamma
+  if(x<=0) return 0;
+  const pre=Math.exp(-x+a*Math.log(x)-lgam(a));
+  if(x<a+1){let ap=a,sum=1/a,del=sum;for(let n=0;n<2000;n++){ap++;del*=x/ap;sum+=del;if(Math.abs(del)<Math.abs(sum)*1e-14)break;}return sum*pre;}
+  let b=x+1-a,c=1e300,d=1/b,h=d;
+  for(let i=1;i<2000;i++){const an=-i*(i-a);b+=2;d=an*d+b;if(Math.abs(d)<1e-300)d=1e-300;c=b+an/c;if(Math.abs(c)<1e-300)c=1e-300;d=1/d;const del=d*c;h*=del;if(Math.abs(del-1)<1e-14)break;}
+  return 1-pre*h;}
+function solve(f,hi){let lo=0;for(let i=0;i<200;i++){const m=(lo+hi)/2;if(f(m)<0)lo=m;else hi=m;}return (lo+hi)/2;}
+function poissonCI(c){ // mean count bounds for observed count c
+  c=Math.round(c); const hi=c+20*Math.sqrt(c+1)+50;
+  const lower=c===0?0:solve(m=>gammaP(c,m)-0.025,hi);
+  const upper=solve(m=>gammaP(c+1,m)-0.975,hi);
+  return [lower,upper];}
+
+function pool(rows){
+  const ticked=rows.filter(d=>d.tick);
+  const ok=ticked.filter(d=>d.cases!==null&&d.py!==null&&d.py>0);
+  const c=ok.reduce((t,d)=>t+d.cases,0), p=ok.reduce((t,d)=>t+d.py,0);
+  const has=ok.length>0;
+  $("pi").textContent=has?fmt(c/p*100):"–";
+  if(has){const [l,u]=poissonCI(c); $("pci").textContent="95% CI "+fmt(l/p*100)+" to "+fmt(u/p*100);}
+  else $("pci").textContent="";
+  $("pc").textContent=has?Math.round(c).toLocaleString():"–";
+  $("pp").textContent=has?Math.round(p).toLocaleString():"–";
+  $("pnote").textContent=!rows.length?"No studies displayed, so nothing to pool."
+    :!ticked.length?"No studies are ticked. Tick at least one study to pool."
+    :!has?"The ticked studies have no incident cases and person-years values, so nothing can be pooled."
+    :`Pooled from ${ok.length} ticked of ${rows.length} displayed ${rows.length===1?"study":"studies"}`+(ok.length<ticked.length?" (ticked studies missing cases or person-years are left out)":"")+". Pooled incidence = total cases ÷ total person-years × 100, with an exact Poisson 95% CI that treats the pooled cases as a single count.";
+}
+
+/* ---------- render ---------- */
+const fmt = v => v===null?"–" : (Math.abs(v)>=100?v.toFixed(0):Math.abs(v)>=10?v.toFixed(1):Math.abs(v)>=1?v.toFixed(2):v.toPrecision(2));
+const esc = s => String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+function whisker(d,max){
+  if(d.rate===null||max<=0) return "";
+  const W=100, x=v=>Math.max(0,Math.min(W,v/max*W));
+  const lo=d.lo??d.rate, hi=d.hi??d.rate;
+  return `<svg class="w" viewBox="0 0 ${W} 18" preserveAspectRatio="none" role="img" aria-label="Rate ${fmt(d.rate)}, interval ${fmt(lo)} to ${fmt(hi)}">
+    <line x1="0" y1="9" x2="${W}" y2="9" stroke="var(--line)" stroke-width="1" vector-effect="non-scaling-stroke"/>
+    <line x1="${x(lo)}" y1="9" x2="${x(hi)}" y2="9" stroke="var(--whisker)" stroke-width="2" vector-effect="non-scaling-stroke"/>
+    <line x1="${x(lo)}" y1="4" x2="${x(lo)}" y2="14" stroke="var(--whisker)" stroke-width="2" vector-effect="non-scaling-stroke"/>
+    <line x1="${x(hi)}" y1="4" x2="${x(hi)}" y2="14" stroke="var(--whisker)" stroke-width="2" vector-effect="non-scaling-stroke"/>
+    <rect x="${x(d.rate)-1.5}" y="4" width="3" height="10" fill="var(--whisker)"/>
+  </svg>`;
+}
+
+function render(){
+  const tb=$("rows");
+  if(!shown||!shown.length){
+    tb.innerHTML=`<tr><td colspan="6" class="empty">No studies match. Widen the year range or choose another nation.</td></tr>`;
+    $("axmax").textContent="";
+    pool([]);
+    fitScroll();
+    return;
+  }
+  const max=Math.max(...shown.map(d=>d.hi??d.rate??0));
+  $("axmax").textContent=fmt(max);
+  tb.innerHTML=shown.map((d,i)=>`
+    <tr class="${d.tick?"":"off"}">
+      <td><input type="checkbox" class="inc" data-i="${i}" ${d.tick?"checked":""} aria-label="Include this study in the pooled estimate"></td>
+      <td>${d.start===d.end?d.start:d.start+"–"+d.end}</td>
+      <td>${esc(d.pop)||"–"} <button type="button" class="info" data-i="${i}" title="Provide more information about study" aria-label="Provide more information about study"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><circle cx="10" cy="10" r="8.5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M7.6 7.9c0-1.4 1-2.3 2.5-2.3s2.4.8 2.4 2c0 1.7-2.1 1.7-2.1 3.3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><circle cx="10.3" cy="14.3" r="1" fill="currentColor"/></svg></button></td>
+      <td class="num rate">${fmt(d.rate)}</td>
+      <td class="num ci">${d.lo===null&&d.hi===null?"–":fmt(d.lo)+" to "+fmt(d.hi)}</td>
+      <td>${whisker(d,max)}</td>
+    </tr>`).join("");
+  pool(shown);
+  fitScroll();
+  document.querySelector(".tablewrap").scrollTop=0;
+}
+
+function fitScroll(){
+  const wrap=document.querySelector(".tablewrap"), trs=document.querySelectorAll("#rows tr");
+  if(shown&&shown.length>VISIBLE&&trs.length>VISIBLE){
+    let h=document.querySelector("thead").offsetHeight+2;
+    for(let i=0;i<VISIBLE;i++) h+=trs[i].offsetHeight;
+    wrap.style.maxHeight=h+"px";
+  } else wrap.style.maxHeight="";
+}
+window.addEventListener("resize",fitScroll);
+
+/* ---------- wire up ---------- */
+$("nation").addEventListener("change",()=>update());
+$("ys").addEventListener("input",()=>update());
+$("ye").addEventListener("input",()=>update());
+$("ftoggle").addEventListener("click",()=>{
+  const open=$("ftoggle").getAttribute("aria-expanded")!=="true";
+  $("ftoggle").setAttribute("aria-expanded",open);
+  $("fpanel").classList.toggle("open",open);
+});
+document.querySelectorAll(".virusbar button").forEach(btn=>btn.addEventListener("click",()=>{
+  virus=btn.dataset.virus;
+  document.querySelectorAll(".virusbar button").forEach(o=>o.setAttribute("aria-selected",o===btn));
+  update();
+}));
+/* ---------- study info popup ---------- */
+let lastTrigger=null;
+const NA='<span style="color:var(--muted)">Not available for this study</span>';
+function openInfo(i,trigger){
+  const d=shown[i]; if(!d) return;
+  lastTrigger=trigger;
+  $("mtitle").textContent=d.title||"Title not available for this study";
+  $("mauthors").innerHTML=d.authors?esc(d.authors):NA;
+  $("mabstract").innerHTML=d.abstract?esc(d.abstract):NA;
+  const ci=(d.lo===null&&d.hi===null)?"":` <small>(95% CI ${fmt(d.lo)} to ${fmt(d.hi)})</small>`;
+  $("mrate").innerHTML=d.rate===null?"–":fmt(d.rate)+ci;
+  $("mcases").textContent=d.cases===null?"–":Math.round(d.cases).toLocaleString();
+  $("mpy").textContent=d.py===null?"–":Math.round(d.py).toLocaleString();
+  $("mabstract").scrollTop=0;
+  $("overlay").hidden=false;
+  $("mclose").focus();
+}
+function closeInfo(){ $("overlay").hidden=true; if(lastTrigger) lastTrigger.focus(); }
+$("rows").addEventListener("change",e=>{
+  const cb=e.target.closest(".inc"); if(!cb) return;
+  shown[+cb.dataset.i].tick=cb.checked;
+  cb.closest("tr").classList.toggle("off",!cb.checked);
+  pool(shown);
+});
+$("rows").addEventListener("click",e=>{const b=e.target.closest(".info"); if(b) openInfo(+b.dataset.i,b);});
+$("mclose").addEventListener("click",closeInfo);
+$("overlay").addEventListener("click",e=>{if(e.target===$("overlay")) closeInfo();});
+document.addEventListener("keydown",e=>{if(e.key==="Escape"&&!$("overlay").hidden) closeInfo();});
+
+buildRisks();
+boot();
+</script>
+</body>
+</html>
