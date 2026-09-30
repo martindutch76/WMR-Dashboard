@@ -63,6 +63,22 @@ tr.unpoolable td.rate,tr.unpoolable td.ci{color:var(--muted)}
 .close:hover{color:var(--ink)}
 .incHead{display:flex;flex-direction:column;align-items:flex-start;gap:4px;font-weight:600}
 .incHead input{accent-color:var(--accent);width:16px;height:16px}
+.forestwrap{margin-top:14px}
+.fstudies{max-height:196px;overflow-y:auto}
+.frow{display:flex;align-items:center;gap:10px;padding:3px 0}
+.flabel{flex:0 0 200px;font-size:.8rem;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fplot{flex:1;position:relative;height:24px}
+.fline{position:absolute;top:50%;height:2px;background:var(--whisker);transform:translateY(-50%)}
+.fcap{position:absolute;top:50%;width:2px;height:11px;background:var(--whisker);transform:translate(-50%,-50%)}
+.fmark{position:absolute;top:50%;border-radius:50%;background:var(--accent);border:1px solid var(--panel);transform:translate(-50%,-50%)}
+.ftotal{margin-top:6px;padding-top:8px;border-top:1px solid var(--line)}
+.ftotal .diamond{width:100%;height:24px;display:block;overflow:visible}
+.faxisline .fplot{height:1px}
+.faxis{position:relative;height:1px;background:var(--line)}
+.faxis .ftick{position:absolute;left:0;top:-4px;width:1px;height:9px;background:var(--line)}
+.faxis .ftick.end{left:100%}
+.fnums{display:flex;justify-content:space-between;font-size:.82rem;font-weight:600;color:var(--muted);height:auto}
+.dcaption{font-size:.82rem;color:var(--muted);margin:6px 2px 0}
 .pooled{display:grid;grid-template-columns:repeat(3,1fr);margin-top:16px;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--panel)}
 .pooled .cell{padding:16px 18px}
 .pooled .cell+.cell{border-left:1px solid var(--line)}
@@ -187,6 +203,7 @@ input[type=file]{font:inherit;max-width:100%}
       <tbody id="rows"></tbody>
     </table>
   </section>
+  <p class="hint">When a paper contributes more than one row here (for example separate viruses, subgroups or time periods), only one of its rows can be ticked for pooling at a time; ticking one automatically unticks the others.</p>
 
   <section class="pooled" aria-live="polite">
     <div class="cell"><div class="h">Pooled Incidence</div><div class="v" id="pi">–</div><div class="ci2" id="pci"></div><div class="u">per 100 person-years</div></div>
@@ -194,6 +211,26 @@ input[type=file]{font:inherit;max-width:100%}
     <div class="cell"><div class="h">Pooled Observation Period (Person Years)</div><div class="v" id="pp">–</div><div class="u">person-years</div></div>
   </section>
   <p class="hint" id="pnote"></p>
+  <div class="forestwrap" id="forestwrap" hidden>
+    <div class="fstudies" id="fstudies"></div>
+    <div class="frow ftotal">
+      <div class="flabel th" id="ftotallabel">Pooled estimate</div>
+      <div class="fplot">
+        <svg class="diamond" viewBox="0 0 1000 28" preserveAspectRatio="none" role="img" aria-label="Pooled incidence and its 95% confidence interval, shown as a diamond on the same scale as the studies above">
+          <polygon id="diamondShape" points="" fill="var(--accent)" stroke="var(--whisker)" stroke-width="1" vector-effect="non-scaling-stroke"/>
+        </svg>
+      </div>
+    </div>
+    <div class="frow faxisline">
+      <div class="flabel"></div>
+      <div class="fplot"><div class="faxis"><span class="ftick"></span><span class="ftick end"></span></div></div>
+    </div>
+    <div class="frow faxisnums">
+      <div class="flabel"></div>
+      <div class="fplot fnums"><span>0</span><span id="diamondMax"></span></div>
+    </div>
+    <p class="dcaption">Pooled incidence per 100 person-years. Circle size reflects each study's observation time; diamond width is the pooled 95% confidence interval.</p>
+  </div>
 </main>
 
 <div id="overlay" class="overlay" hidden>
@@ -263,11 +300,14 @@ function normalise(rows){
   const all=rows.map(r=>{
     const y=(r.study_year===null||r.study_year===undefined)?null:Number(r.study_year);
     const rateVal=num(r.rate_per_100py), casesVal=num(r.incident_cases_n), pyVal=num(r.observation_person_years);
+    const pubYearMatch=String(r.pub_date||"").match(/\d{4}/);
     return {
       nation:(r.nation||"").trim(),
       start:Number.isFinite(y)?y:null, end:Number.isFinite(y)?y:null,
       pop:r.population||"",
       title:r.title||"", authors:r.authors||"", abstract:r.abstract||"",
+      pmid:(r.pmid!==null && r.pmid!==undefined)?String(r.pmid):null,
+      pubYear:pubYearMatch?parseInt(pubYearMatch[0],10):null,
       poolable:rateVal!==null && casesVal!==null && pyVal!==null && pyVal>0,
       tick:true,
       cats:RISKS.filter(k=>r[k[2]]===true).map(k=>k[0]),
@@ -277,11 +317,38 @@ function normalise(rows){
     };
   });
   data=all.filter(d=>d.start!==null);
+  initTicks();
   const noYear=all.length-data.length;
   const st=$("status"), stt=$("statustext"); st.classList.remove("err"); $("spinner").hidden=true;
   stt.textContent = noYear ? `${noYear.toLocaleString()} of ${all.length.toLocaleString()} rows have no study year and are left out of the year filter.` : "";
   if(!data.length){ stt.textContent="Connected, but no rows with a study year were returned."; st.classList.add("err"); return; }
   setupControls();
+}
+
+/* Where several rows share a PubMed ID (subgroups, periods or viruses from
+   one paper), only one can be ticked for pooling at a time, since pooling
+   both would double-count that paper's population. On load, the row with
+   the most person-years of observation in each such group is ticked and
+   the rest are cleared; rows without a PMID are unaffected and default on. */
+function initTicks(){
+  const groups={};
+  data.forEach(d=>{ if(d.pmid) (groups[d.pmid]=groups[d.pmid]||[]).push(d); });
+  Object.values(groups).forEach(group=>{
+    const poolableRows=group.filter(d=>d.poolable);
+    group.forEach(d=>{ d.tick=false; });
+    if(poolableRows.length){
+      poolableRows.sort((a,b)=>(b.py||0)-(a.py||0));
+      poolableRows[0].tick=true;
+    }
+  });
+}
+
+/* Enforces the same one-ticked-row-per-PMID rule when the user ticks a row
+   on interactively: unticks every other row sharing that PMID, wherever it
+   is in the full dataset (not only the currently displayed rows). */
+function enforcePmidExclusivity(row){
+  if(!row.pmid) return;
+  data.forEach(o=>{ if(o!==row && o.pmid===row.pmid) o.tick=false; });
 }
 
 async function boot(){
@@ -484,6 +551,7 @@ function pool(rows){
     $("pnote").textContent=!rows.length?"No studies displayed, so nothing to pool."
       :!ticked.length?"No studies are ticked. Tick at least one study to pool."
       :"The ticked studies have no incident cases and person-years values, so nothing can be pooled.";
+    $("forestwrap").hidden=true;
     return;
   }
   const fit=fitPooledIncidence(ok);
@@ -493,6 +561,66 @@ function pool(rows){
   const tauNote = fit.tau!==null ? ` Between-study SD on the log-rate scale (τ): ${fit.tau.toFixed(3)}.` : "";
   const flag = fit.method!=="glmm" ? ` Interval shown is an exact Poisson interval on the pooled total instead (${fit.method}).` : "";
   $("pnote").textContent=base+tauNote+flag+(ok.length<ticked.length?" Ticked studies missing cases or person-years are left out of both the GLMM and the totals.":"");
+  drawForest(fit, rows, ok);
+}
+
+/* Draws a forest plot: one row per ticked, poolable study (a circle at its
+   rate with a whisker to its 95% CI, sized by its person-years), then the
+   pooled GLMM estimate as a diamond, all on one shared 0–max axis (max =
+   the highest CI upper bound, or rate where no CI, among the studies
+   currently displayed in the table above). */
+/* Builds a short "(Surname et al, Year)" citation label for the forest
+   plot below, from the first author of a PubMed-style author list
+   ("Surname Initials, Surname Initials, ...") and the paper's publication
+   year, falling back to the study's own year if no publication year was
+   captured. This label is only used in the forest plot; the table above
+   continues to show the population description. */
+function surnameFromAuthors(authors){
+  const first=(authors||"").split(",")[0].trim();
+  if(!first) return "";
+  const m=first.match(/^(.*?)\s+[A-Z]{1,3}(?:\s+[A-Z]{1,3})*$/);
+  return (m?m[1]:first).trim();
+}
+function citeLabel(d){
+  const surname=surnameFromAuthors(d.authors);
+  const year=d.pubYear ?? d.start ?? d.end ?? null;
+  if(surname && year) return `(${surname} et al, ${year})`;
+  if(surname) return `(${surname} et al)`;
+  if(year) return `(Source unknown, ${year})`;
+  return "(Source unknown)";
+}
+
+function drawForest(fit, rows, ok){
+  const wrap=$("forestwrap");
+  const axisMax=Math.max(...rows.map(d=>d.hi??d.rate??0));
+  if(!(axisMax>0) || !ok.length){ wrap.hidden=true; return; }
+  wrap.hidden=false;
+  const pct=v=>Math.max(0,Math.min(v,axisMax))/axisMax*100;
+  const maxPy=Math.max(...ok.map(d=>d.py||0)) || 1;
+  const R_MIN=3, R_MAX=7;
+
+  $("fstudies").innerHTML=ok.map(d=>{
+    const lo=d.lo??d.rate, hi=d.hi??d.rate;
+    const label=citeLabel(d);
+    const r=R_MIN+(R_MAX-R_MIN)*Math.sqrt((d.py||0)/maxPy);
+    return `<div class="frow">
+      <div class="flabel" title="${esc(label)}">${esc(label)}</div>
+      <div class="fplot" role="img" aria-label="${esc(d.pop||"Study")}: rate ${fmt(d.rate)}, interval ${fmt(lo)} to ${fmt(hi)}">
+        <div class="fline" style="left:${pct(lo)}%;width:${pct(hi)-pct(lo)}%"></div>
+        <div class="fcap" style="left:${pct(lo)}%"></div>
+        <div class="fcap" style="left:${pct(hi)}%"></div>
+        <div class="fmark" style="left:${pct(d.rate)}%;width:${r*2}px;height:${r*2}px"></div>
+      </div>
+    </div>`;
+  }).join("");
+
+  const lo=fit.lo??fit.rate, hi=fit.hi??fit.rate, mid=pct(fit.rate)*10;
+  const pts=`${pct(lo)*10},14 ${mid},2 ${pct(hi)*10},14 ${mid},26`;
+  $("diamondShape").setAttribute("points",pts);
+  $("diamondMax").textContent=fmt(axisMax);
+  $("ftotallabel").textContent=`Pooled estimate (${ok.length} ${ok.length===1?"study":"studies"})`;
+  const svg=wrap.querySelector(".ftotal svg");
+  svg.setAttribute("aria-label",`Pooled incidence ${fmt(fit.rate)}, 95% confidence interval ${fmt(lo)} to ${fmt(hi)}, on an axis from 0 to ${fmt(axisMax)} per 100 person-years`);
 }
 
 /* ---------- render ---------- */
@@ -513,6 +641,18 @@ function whisker(d,max){
 }
 
 function render(){
+  paintTable();
+  document.querySelector(".tablewrap").scrollTop=0;
+}
+
+/* Repaints the table in place without resetting scroll position — used
+   after ticking/unticking a study, so ticking several rows in a long,
+   scrolled list doesn't keep jumping the view back to the top. */
+function renderRows(){
+  paintTable();
+}
+
+function paintTable(){
   const tb=$("rows");
   if(!shown||!shown.length){
     tb.innerHTML=`<tr><td colspan="6" class="empty">No studies match. Widen the year range or choose another nation.</td></tr>`;
@@ -537,7 +677,6 @@ function render(){
   pool(shown);
   syncIncAll();
   fitScroll();
-  document.querySelector(".tablewrap").scrollTop=0;
 }
 
 function syncIncAll(){
@@ -594,15 +733,22 @@ function openInfo(i,trigger){
 function closeInfo(){ $("overlay").hidden=true; if(lastTrigger) lastTrigger.focus(); }
 $("rows").addEventListener("change",e=>{
   const cb=e.target.closest(".inc"); if(!cb) return;
-  shown[+cb.dataset.i].tick=cb.checked;
-  cb.closest("tr").classList.toggle("off",!cb.checked);
-  pool(shown);
-  syncIncAll();
+  const d=shown[+cb.dataset.i];
+  d.tick=cb.checked;
+  if(cb.checked) enforcePmidExclusivity(d);
+  renderRows();
 });
 $("incAll").addEventListener("change",()=>{
   const on=$("incAll").checked;
-  (shown||[]).forEach(d=>{ if(d.poolable) d.tick=on; });
-  render();
+  const eligible=(shown||[]).filter(d=>d.poolable);
+  if(on){
+    // ascending person-years, so the highest-py study in each PMID group
+    // is ticked last and so wins the one-per-PMID exclusivity rule
+    eligible.slice().sort((a,b)=>(a.py||0)-(b.py||0)).forEach(d=>{ d.tick=true; enforcePmidExclusivity(d); });
+  } else {
+    eligible.forEach(d=>{ d.tick=false; });
+  }
+  renderRows();
 });
 $("rows").addEventListener("click",e=>{const b=e.target.closest(".info"); if(b) openInfo(+b.dataset.i,b);});
 $("mclose").addEventListener("click",closeInfo);
