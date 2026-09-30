@@ -203,7 +203,7 @@ input[type=file]{font:inherit;max-width:100%}
       <tbody id="rows"></tbody>
     </table>
   </section>
-  <p class="hint">When a paper contributes more than one row here (for example separate viruses, subgroups or time periods), only one of its rows can be ticked for pooling at a time; ticking one automatically unticks the others.</p>
+  <p class="hint">When a paper contributes more than one row for the same virus here (for example subgroups or time periods), only one of those rows can be ticked for pooling at a time; ticking one automatically unticks the others. A paper's rows for a different virus, shown on that virus's own tab, are unaffected.</p>
 
   <section class="pooled" aria-live="polite">
     <div class="cell"><div class="h">Pooled Incidence</div><div class="v" id="pi">–</div><div class="ci2" id="pci"></div><div class="u">per 100 person-years</div></div>
@@ -325,14 +325,17 @@ function normalise(rows){
   setupControls();
 }
 
-/* Where several rows share a PubMed ID (subgroups, periods or viruses from
-   one paper), only one can be ticked for pooling at a time, since pooling
-   both would double-count that paper's population. On load, the row with
-   the most person-years of observation in each such group is ticked and
-   the rest are cleared; rows without a PMID are unaffected and default on. */
+/* Where several rows share a PubMed ID AND virus (subgroups or periods
+   within one paper's estimate for the same disease), only one can be
+   ticked for pooling at a time, since pooling both would double-count that
+   paper's population for that virus. Two rows from the same paper for
+   different viruses (e.g. its HBV and HIV rates) are unrelated to each
+   other and are never linked by this rule. On load, the row with the most
+   person-years of observation in each pmid+virus group is ticked and the
+   rest are cleared; rows without a PMID are unaffected and default on. */
 function initTicks(){
   const groups={};
-  data.forEach(d=>{ if(d.pmid) (groups[d.pmid]=groups[d.pmid]||[]).push(d); });
+  data.forEach(d=>{ if(d.pmid) (groups[d.pmid+"|"+d.virus]=groups[d.pmid+"|"+d.virus]||[]).push(d); });
   Object.values(groups).forEach(group=>{
     const poolableRows=group.filter(d=>d.poolable);
     group.forEach(d=>{ d.tick=false; });
@@ -343,12 +346,14 @@ function initTicks(){
   });
 }
 
-/* Enforces the same one-ticked-row-per-PMID rule when the user ticks a row
-   on interactively: unticks every other row sharing that PMID, wherever it
-   is in the full dataset (not only the currently displayed rows). */
+/* Enforces the same one-ticked-row-per-PMID-and-virus rule when the user
+   ticks a row on interactively: unticks every other row sharing that PMID
+   AND virus, wherever it is in the full dataset (not only the currently
+   displayed rows) — but leaves rows for other viruses from the same paper
+   alone, since those are independent estimates shown on their own tab. */
 function enforcePmidExclusivity(row){
   if(!row.pmid) return;
-  data.forEach(o=>{ if(o!==row && o.pmid===row.pmid) o.tick=false; });
+  data.forEach(o=>{ if(o!==row && o.pmid===row.pmid && o.virus===row.virus) o.tick=false; });
 }
 
 async function boot(){
@@ -592,7 +597,9 @@ function citeLabel(d){
 
 function drawForest(fit, rows, ok){
   const wrap=$("forestwrap");
-  const axisMax=Math.max(...rows.map(d=>d.hi??d.rate??0));
+  // Axis is scaled to the studies actually being pooled (ticked, poolable,
+  // for the current virus/filters) — not every row displayed in the table.
+  const axisMax=Math.max(...ok.map(d=>d.hi??d.rate??0));
   if(!(axisMax>0) || !ok.length){ wrap.hidden=true; return; }
   wrap.hidden=false;
   const pct=v=>Math.max(0,Math.min(v,axisMax))/axisMax*100;
