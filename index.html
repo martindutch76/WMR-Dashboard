@@ -45,6 +45,9 @@ tr.off td:not(:first-child){opacity:.45}
 tr.unpoolable td:not(:first-child){color:var(--muted)}
 tr.unpoolable td.rate,tr.unpoolable td.ci{color:var(--muted)}
 .xbox{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;color:var(--muted);font-weight:700;font-size:.95rem;cursor:default}
+.flagicon{display:inline-flex;vertical-align:middle;margin-left:4px;cursor:default}
+.flagicon.warn{color:#E07B30}
+.flagicon.info{color:var(--accent)}
 .info{border:0;background:transparent;color:var(--accent);padding:0 2px;margin-left:4px;cursor:pointer;vertical-align:middle;line-height:0;border-radius:50%}
 .info:hover{color:var(--ink)}
 .overlay{position:fixed;inset:0;background:rgba(10,20,28,.55);display:flex;align-items:center;justify-content:center;padding:16px;z-index:50}
@@ -338,7 +341,11 @@ function normalise(rows){
       cats:RISKS.filter(k=>r[k[2]]===true).map(k=>k[0]),
       virus:String(r.virus||"").trim().toUpperCase(),
       cases:casesVal, py:pyVal,
-      rate:rateVal, lo:num(r.ci_lower_per_100py), hi:num(r.ci_upper_per_100py)
+      rate:rateVal, lo:num(r.ci_lower_per_100py), hi:num(r.ci_upper_per_100py),
+      rowType:r.row_type||null, rawRate:num(r.rate_value),
+      rateSource:r.rate_source||null, casesSource:r.cases_source||null,
+      pySource:r.py_source||null, ciSource:r.ci_source||null,
+      notes:r.processing_notes||""
     };
   });
   data=all.filter(d=>d.start!==null);
@@ -695,6 +702,46 @@ function drawForest(fit, rows, ok){
 const fmt = v => v===null?"–" : (Math.abs(v)>=100?v.toFixed(0):Math.abs(v)>=10?v.toFixed(1):Math.abs(v)>=1?v.toFixed(2):v.toPrecision(2));
 const esc = s => String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 
+/* ---------- per-population warning / info flags ---------- */
+/* tier "info": an expected, routine part of back-calculation, not a problem.
+   tier "warn": worth a second look. A row's icon is a warning if any warn-tier
+   flag matches, else an info mark if only info-tier flags match. Hovering
+   shows every matching flag's plain-English text, one per line. */
+const FLAG_DEFS = [
+  {tier:"info", text:"Rate wasn't stated in the paper — calculated from case count and follow-up time", test:d=>d.rateSource==="calculated"},
+  {tier:"warn", text:"No rate could be determined for this population", test:d=>!d.rateSource},
+  {tier:"info", text:"Case count wasn't stated in the paper — estimated from the rate and follow-up time", test:d=>d.casesSource==="back-calculated"},
+  {tier:"warn", text:"No case count is available for this population", test:d=>!d.casesSource},
+  {tier:"info", text:"Follow-up time wasn't stated in the paper — estimated from the rate and case count", test:d=>d.pySource==="back-calculated"},
+  {tier:"warn", text:"No follow-up time is available for this population", test:d=>!d.pySource},
+  {tier:"info", text:"Confidence interval wasn't stated in the paper — calculated from the reported case count and follow-up time", test:d=>d.ciSource==="calculated"},
+  {tier:"info", text:"Confidence interval wasn't stated in the paper — calculated using an estimated case count or follow-up time", test:d=>d.ciSource==="back-calculated"},
+  {tier:"warn", text:"No confidence interval could be calculated for this population", test:d=>!d.ciSource},
+  {tier:"warn", text:"The estimated case count rounded down to zero — treat this rate with caution", test:d=>/rounded to 0/i.test(d.notes)},
+  {tier:"warn", text:"Follow-up time couldn't be worked out, because the reported rate or case count was zero", test:d=>/person-time not calculable/i.test(d.notes)},
+  {tier:"warn", text:"The reported rate doesn't match the reported case count and follow-up time for this study", test:d=>/differs from cases\/person-time/i.test(d.notes)},
+  {tier:"warn", text:"This rate is unusually high (above 50 per 100 person-years)", test:d=>d.rate!==null && d.rate>50},
+  {tier:"warn", text:"This rate couldn't be converted to a standard unit", test:d=>d.rawRate!==null && d.rate===null},
+  {tier:"warn", text:"This subgroup's rate is far higher than the same paper's overall rate", test:(d,all)=>{
+    if(d.rowType==="overall" || d.rate===null || !d.pmid) return false;
+    const overall=all.find(o=>o.pmid===d.pmid && o.virus===d.virus && o.rowType==="overall" && o.rate!==null);
+    return !!overall && d.rate > 5*overall.rate;
+  }}
+];
+function rowFlags(d){
+  const matches=FLAG_DEFS.filter(f=>f.test(d,data));
+  if(!matches.length) return null;
+  return {warn:matches.some(m=>m.tier==="warn"), texts:matches.map(m=>m.text).join("\n")};
+}
+function flagIconHtml(d){
+  const fl=rowFlags(d);
+  if(!fl) return "";
+  const t=esc(fl.texts);
+  return fl.warn
+    ? `<span class="flagicon warn" title="${t}" aria-label="Warning: ${t}"><svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path d="M12 4 L21 19 L3 19 Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><line x1="12" y1="10" x2="12" y2="14.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="16.8" r="1" fill="currentColor"/></svg></span>`
+    : `<span class="flagicon info" title="${t}" aria-label="Note: ${t}"><svg viewBox="0 0 20 20" width="14" height="14" aria-hidden="true"><circle cx="10" cy="10" r="8.5" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="10" cy="6.3" r="1" fill="currentColor"/><line x1="10" y1="9.2" x2="10" y2="14.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span>`;
+}
+
 function whisker(d,max){
   if(d.rate===null||max<=0) return "";
   const W=100, x=v=>Math.max(0,Math.min(W,v/max*W));
@@ -735,7 +782,7 @@ function paintTable(){
     <tr class="${!d.poolable?"unpoolable":d.tick?"":"off"}">
       <td>${d.poolable
         ? `<input type="checkbox" class="inc" data-i="${i}" ${d.tick?"checked":""} aria-label="Include this study in the pooled estimate">`
-        : `<span class="xbox" title="Missing rate, incident cases or person-years — not available for pooling" aria-label="Not available for pooling: missing rate, incident cases or person-years">✕</span>`}</td>
+        : `<span class="xbox" title="Missing rate, incident cases or person-years — not available for pooling" aria-label="Not available for pooling: missing rate, incident cases or person-years">✕</span>`}${flagIconHtml(d)}</td>
       <td>${d.start===d.end?d.start:d.start+"–"+d.end}</td>
       <td>${esc(d.pop)||"–"} <button type="button" class="info" data-i="${i}" title="Provide more information about study" aria-label="Provide more information about study"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><circle cx="10" cy="10" r="8.5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M7.6 7.9c0-1.4 1-2.3 2.5-2.3s2.4.8 2.4 2c0 1.7-2.1 1.7-2.1 3.3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><circle cx="10.3" cy="14.3" r="1" fill="currentColor"/></svg></button></td>
       <td class="num rate">${fmt(d.rate)}</td>
