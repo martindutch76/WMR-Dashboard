@@ -64,7 +64,7 @@ tr.unpoolable td.rate,tr.unpoolable td.ci{color:var(--muted)}
 .incHead{display:flex;flex-direction:column;align-items:flex-start;gap:4px;font-weight:600}
 .incHead input{accent-color:var(--accent);width:16px;height:16px}
 .forestwrap{margin-top:14px}
-.fstudies{max-height:196px;overflow-y:auto}
+.fstudies{/* expands to fit all rows, no scrolling */}
 .frow{display:flex;align-items:center;gap:10px;padding:3px 0}
 .flabel{flex:0 0 200px;font-size:.8rem;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .fplot{flex:1;position:relative;height:24px}
@@ -252,20 +252,45 @@ input[type=file]{font:inherit;max-width:100%}
 const SUPABASE_URL = "https://hqyvrfftoajdhkccvqam.supabase.co";
 const SUPABASE_KEY = "sb_publishable_gulOoDgxHgWEVgXvCXojAg_E4Jq4xFY"; // public key only. NEVER the service_role / secret key.
 const SOURCE = "incidence_dashboard";                // read-only view created by supabase_setup.sql
+const NATIONS_SOURCE = "incidence_nations";          // small distinct-nation view, also from supabase_setup.sql
 const PAGE = 1000;                                   // Supabase returns at most 1000 rows per request
+const GLOBAL = "__global__";                         // sentinel nation value meaning "every nation"
 
 /* ---------- state ---------- */
 const MAX=100;   // never load more than this many rows into the table
 const VISIBLE=6; // rows visible before the table scrolls
-let data = [];          // normalised rows
+let data = [];          // normalised rows for the currently loaded nation (or every nation, for Global)
 let shown = null;       // currently displayed rows
+let loadToken = 0;      // guards against a slow, superseded fetch overwriting a later one
 const $ = id => document.getElementById(id);
 
-async function fetchAll(){
-  const headers={apikey:SUPABASE_KEY,Authorization:"Bearer "+SUPABASE_KEY,"Range-Unit":"items"};
+function authHeaders(){
+  return {apikey:SUPABASE_KEY, Authorization:"Bearer "+SUPABASE_KEY, "Range-Unit":"items"};
+}
+
+/* A single, fast request for just the distinct nation names — this is what
+   lets the dropdown appear almost immediately, instead of waiting on the
+   full (much larger) incidence_dashboard fetch below. */
+async function fetchNations(){
+  const res=await fetch(`${SUPABASE_URL}/rest/v1/${NATIONS_SOURCE}?select=nation&order=nation.asc`,
+    {headers:authHeaders()});
+  if(!res.ok){
+    let detail=""; try{detail=(await res.json()).message||"";}catch(e){}
+    throw new Error(`HTTP ${res.status}${detail?": "+detail:""}`);
+  }
+  return (await res.json()).map(r=>r.nation).filter(Boolean);
+}
+
+/* Fetches incidence_dashboard rows for one nation (nation=null fetches
+   every nation, for the Global option), paging through Supabase's 1000-row
+   response cap. Only ever loads the nation currently selected, not the
+   whole table. */
+async function fetchRows(nation){
+  const headers=authHeaders();
+  const filter = nation ? `&nation=eq.${encodeURIComponent(nation)}` : "";
   const rows=[];
   for(let from=0;;from+=PAGE){
-    const res=await fetch(`${SUPABASE_URL}/rest/v1/${SOURCE}?select=*&order=source_id.asc`,
+    const res=await fetch(`${SUPABASE_URL}/rest/v1/${SOURCE}?select=*${filter}&order=source_id.asc`,
       {headers:{...headers,Range:`${from}-${from+PAGE-1}`}});
     if(res.status===416) break;                    // past the last row
     if(!res.ok){
@@ -320,9 +345,13 @@ function normalise(rows){
   initTicks();
   const noYear=all.length-data.length;
   const st=$("status"), stt=$("statustext"); st.classList.remove("err"); $("spinner").hidden=true;
+  if(!data.length){
+    stt.textContent = all.length ? "None of this nation's rows have a study year, so none can be shown." : "No rows were found for this nation.";
+    applyLoadedDataset(); // still clears sliders/table/pooled banner to an empty state
+    return;
+  }
   stt.textContent = noYear ? `${noYear.toLocaleString()} of ${all.length.toLocaleString()} rows have no study year and are left out of the year filter.` : "";
-  if(!data.length){ stt.textContent="Connected, but no rows with a study year were returned."; st.classList.add("err"); return; }
-  setupControls();
+  applyLoadedDataset();
 }
 
 /* Where several rows share a PubMed ID AND virus (subgroups or periods
@@ -362,11 +391,46 @@ async function boot(){
     sp.hidden=true; stt.textContent="Add your Supabase URL and public key at the top of the script (SUPABASE_URL and SUPABASE_KEY).";
     st.classList.add("err"); return;
   }
-  sp.hidden=false; stt.textContent="Loading population data…";
-  try{ normalise(await fetchAll()); }
-  catch(e){
+  sp.hidden=false; stt.textContent="Loading nation list…";
+  try{
+    const nations=await fetchNations();
+    populateNationDropdown(nations);
+    const start = nations.includes("Australia") ? "Australia" : (nations[0] ?? GLOBAL);
+    $("nation").value=start;
+    await loadNation(start);
+  } catch(e){
+    sp.hidden=true; stt.textContent="Could not load the nation list from Supabase ("+e.message+"). Check the URL and key, and that the view exists and the anon role can read it.";
+    st.classList.add("err");
+  }
+}
+
+function populateNationDropdown(nations){
+  const sel=$("nation"); sel.innerHTML="";
+  const add=(v,t)=>{const o=document.createElement("option");o.value=v;o.textContent=t;sel.appendChild(o);};
+  nations.forEach(n=>add(n,n));
+  add(GLOBAL,"Global (every nation)");
+}
+
+/* Fetches one nation's rows (or, for GLOBAL, every nation's — slow, by
+   design, since most sessions won't need it) and swaps the dashboard over
+   to them. A load token guards against a slow fetch landing after a later,
+   faster one if the user changes the dropdown again before this resolves. */
+async function loadNation(nation){
+  const st=$("status"), stt=$("statustext"), sp=$("spinner");
+  const myToken=++loadToken;
+  sp.hidden=false; st.classList.remove("err");
+  stt.textContent = nation===GLOBAL ? "Loading every nation… this can take a while." : `Loading ${nation}…`;
+  $("nation").disabled=true;
+  try{
+    const rows=await fetchRows(nation===GLOBAL ? null : nation);
+    if(myToken!==loadToken) return; // superseded by a later selection
+    normalise(rows);
+  } catch(e){
+    if(myToken!==loadToken) return;
     sp.hidden=true; stt.textContent="Could not load data from Supabase ("+e.message+"). Check the URL and key, that the view exists, and that the anon role can read it.";
     st.classList.add("err");
+  } finally {
+    if(myToken===loadToken) $("nation").disabled=false;
   }
 }
 
@@ -386,17 +450,12 @@ function buildRisks(){
 const selectedRisks=()=>[...document.querySelectorAll("#rgrid input:checked")].map(c=>c.value);
 
 /* ---------- controls ---------- */
-function setupControls(){
-  const prev=$("nation").value;
-  const nations=[...new Set(data.map(d=>d.nation).filter(Boolean))].sort();
-  const sel=$("nation"); sel.innerHTML="";
-  const add=(v,t)=>{const o=document.createElement("option");o.value=v;o.textContent=t;sel.appendChild(o);};
-  add("__all","All nations");
-  nations.forEach(n=>add(n,n));
-  sel.value = nations.includes(prev)?prev : nations.includes("Australia")?"Australia":"__all";
-
+/* Called once per nation load (the dropdown itself is built separately, in
+   populateNationDropdown(), from the fast nation-list fetch — this only
+   resets the year sliders to fit whatever was just loaded). */
+function applyLoadedDataset(){
   const ys=data.map(d=>d.start), ye=data.map(d=>d.end);
-  const lo=Math.min(...ys,...ye), hi=Math.max(...ys,...ye);
+  const lo=ys.length?Math.min(...ys,...ye):0, hi=ys.length?Math.max(...ys,...ye):0;
   [$("ys"),$("ye")].forEach(el=>{el.min=lo;el.max=hi;});
   $("ys").value=lo; $("ye").value=hi;
   update(true);
@@ -410,12 +469,14 @@ function update(resetSample){
 
   const nat=$("nation").value;
   const rsel=selectedRisks();
-  const matches=data.filter(d=>(nat==="__all"||d.nation===nat) && d.virus===virus && d.start<=b && d.end>=a &&
+  // data already holds only the loaded nation's rows (or every nation's,
+  // for Global), so no further nation filtering happens here.
+  const matches=data.filter(d=>d.virus===virus && d.start<=b && d.end>=a &&
                     (!rsel.length || rsel.every(c=>d.cats.includes(c))))
                     .sort((x,y)=>y.start-x.start||y.end-x.end);
   window._matches=matches;
   const rl=rsel.length===0?"all risk groups":rsel.map(id=>RISKS.find(r=>r[0]===id)[1]).join(" and ");
-  $("fsum").textContent=(nat==="__all"?"All nations":nat)+", "+a+"–"+b+", "+rl;
+  $("fsum").textContent=(nat===GLOBAL?"Global (every nation)":nat)+", "+a+"–"+b+", "+rl;
   $("n").textContent=matches.length.toLocaleString();
   $("ntext").textContent="Populations Found"+(matches.length>MAX?" — showing "+MAX:"");
   shown = matches.slice(0,MAX);
@@ -707,7 +768,7 @@ function fitScroll(){
 window.addEventListener("resize",fitScroll);
 
 /* ---------- wire up ---------- */
-$("nation").addEventListener("change",()=>update());
+$("nation").addEventListener("change",()=>loadNation($("nation").value));
 $("ys").addEventListener("input",()=>update());
 $("ye").addEventListener("input",()=>update());
 $("ftoggle").addEventListener("click",()=>{
