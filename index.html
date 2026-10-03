@@ -45,7 +45,8 @@ tr.off td:not(:first-child){opacity:.45}
 tr.unpoolable td:not(:first-child){color:var(--muted)}
 tr.unpoolable td.rate,tr.unpoolable td.ci{color:var(--muted)}
 .xbox{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;color:var(--muted);font-weight:700;font-size:.95rem;cursor:default}
-.flagicon{display:inline-flex;vertical-align:middle;margin-left:4px;cursor:default}
+.flagicon{display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;vertical-align:middle;margin-left:4px;cursor:default}
+.flagicon svg{width:100%;height:100%;display:block}
 .flagicon.warn{color:#E07B30}
 .flagicon.info{color:var(--accent)}
 .info{border:0;background:transparent;color:var(--accent);padding:0 2px;margin-left:4px;cursor:pointer;vertical-align:middle;line-height:0;border-radius:50%}
@@ -56,7 +57,19 @@ tr.unpoolable td.rate,tr.unpoolable td.ci{color:var(--muted)}
 .modal h2{font-size:1.15rem;line-height:1.35;margin:0 34px 6px 0}
 .modal .authors{color:var(--muted);margin:0 0 14px;font-size:.92rem}
 .modal .lbl{margin-bottom:4px}
+.lblrow{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px}
+.lblrow .lbl{margin-bottom:0}
+.reflink{display:inline-flex;align-items:center;color:var(--accent);opacity:.85}
+.reflink:hover{opacity:1}
+.reflink[hidden]{display:none}
 .abstract{flex:1 1 auto;min-height:90px;max-height:45vh;overflow-y:auto;border:1px solid var(--line);border-radius:8px;padding:12px 14px;background:var(--bg);font-size:.93rem;line-height:1.6;white-space:pre-wrap}
+.mflags{margin-top:12px;border-radius:8px;padding:10px 14px;font-size:.88rem;border:1px solid}
+.mflags.warn{background:var(--warn-bg);border-color:var(--warn);color:var(--warn)}
+.mflags.info{background:var(--accent-soft);border-color:var(--accent);color:var(--ink)}
+.mflagtitle{display:flex;align-items:center;gap:7px;font-weight:700;margin-bottom:9px}
+.mflags.info .mflagtitle{color:var(--accent)}
+.mflags ul{margin:0;padding-left:20px;color:var(--ink)}
+.mflags li{margin:2px 0}
 .mfoot{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:16px -22px 0;padding:14px 22px;border-top:1px solid var(--line);background:var(--accent-soft)}
 .mfoot .k{font-size:.8rem;color:var(--muted);font-weight:600}
 .mfoot .val{font-size:1.15rem;font-weight:700}
@@ -241,8 +254,14 @@ input[type=file]{font:inherit;max-width:100%}
     <button type="button" class="close" id="mclose" aria-label="Close">&times;</button>
     <h2 id="mtitle"></h2>
     <p class="authors" id="mauthors"></p>
-    <div class="lbl">Abstract</div>
+    <div class="lblrow">
+      <div class="lbl">Abstract</div>
+      <a class="reflink" id="mref" href="#" target="_blank" rel="noopener" title="Open this article on PubMed" aria-label="Open this article on PubMed, opens in a new tab" hidden>
+        <svg viewBox="0 0 70 70" width="30" height="30" aria-hidden="true"><path d="M8 4 h26 l14 14 v46 h-40 z" fill="none" stroke="currentColor" stroke-width="5.5" stroke-linejoin="round"/><path d="M34 4 v14 h14" fill="none" stroke="currentColor" stroke-width="5.5" stroke-linejoin="round"/><text x="28" y="53" text-anchor="middle" font-size="19" font-weight="800" fill="currentColor" font-family="Public Sans, sans-serif">Ref</text></svg>
+      </a>
+    </div>
     <div class="abstract" id="mabstract" tabindex="0"></div>
+    <div class="mflags" id="mflags" hidden></div>
     <div class="mfoot">
       <div><div class="k">Incidence rate</div><div class="val" id="mrate"></div></div>
       <div><div class="k">Incident count</div><div class="val" id="mcases"></div></div>
@@ -649,10 +668,18 @@ function pool(rows){
    captured. This label is only used in the forest plot; the table above
    continues to show the population description. */
 function surnameFromAuthors(authors){
+  // Surname is always the first word of the first author's name, whether
+  // what follows is initials ("Smith AB") or a full given name ("Iversen
+  // Jenny") — both formats appear in this data. A small list of lowercase
+  // name particles ("de", "van", ...) is folded into the surname too, so
+  // "de Vries JW" reads as "de Vries" rather than just "de".
   const first=(authors||"").split(",")[0].trim();
   if(!first) return "";
-  const m=first.match(/^(.*?)\s+[A-Z]{1,3}(?:\s+[A-Z]{1,3})*$/);
-  return (m?m[1]:first).trim();
+  const words=first.split(/\s+/);
+  const particle=/^(de|den|der|van|von|la|le|du|di|da|dos|el|al)$/i;
+  let i=0;
+  while(i+1<words.length && particle.test(words[i])) i++;
+  return words.slice(0,i+1).join(" ");
 }
 function citeLabel(d){
   const surname=surnameFromAuthors(d.authors);
@@ -837,6 +864,21 @@ function openInfo(i,trigger){
   $("mtitle").textContent=d.title||"Title not available for this study";
   $("mauthors").innerHTML=d.authors?esc(d.authors):NA;
   $("mabstract").innerHTML=d.abstract?esc(d.abstract):NA;
+  const mref=$("mref");
+  if(d.pmid){ mref.href=`https://pubmed.ncbi.nlm.nih.gov/${encodeURIComponent(d.pmid)}/`; mref.hidden=false; }
+  else { mref.hidden=true; mref.removeAttribute("href"); }
+  const fl=rowFlags(d), mf=$("mflags");
+  if(fl){
+    mf.hidden=false;
+    mf.className="mflags "+(fl.warn?"warn":"info");
+    const icon=fl.warn
+      ? `<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M12 4 L21 19 L3 19 Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><line x1="12" y1="10" x2="12" y2="14.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="16.8" r="1" fill="currentColor"/></svg>`
+      : `<svg viewBox="0 0 20 20" width="15" height="15" aria-hidden="true"><circle cx="10" cy="10" r="8.5" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="10" cy="6.3" r="1" fill="currentColor"/><line x1="10" y1="9.2" x2="10" y2="14.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>`;
+    mf.innerHTML=`<div class="mflagtitle">${icon}<span>Attention: Data Extraction Note</span></div>
+      <ul>${fl.texts.split("\n").map(t=>`<li>${esc(t)}</li>`).join("")}</ul>`;
+  } else {
+    mf.hidden=true; mf.innerHTML="";
+  }
   const ci=(d.lo===null&&d.hi===null)?"":` <small>(95% CI ${fmt(d.lo)} to ${fmt(d.hi)})</small>`;
   $("mrate").innerHTML=d.rate===null?"–":fmt(d.rate)+ci;
   $("mcases").textContent=d.cases===null?"–":Math.round(d.cases).toLocaleString();
