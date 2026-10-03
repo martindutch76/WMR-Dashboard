@@ -156,6 +156,7 @@ summary{cursor:pointer;color:var(--muted);font-size:.9rem}
 .load{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:12px}
 input[type=file]{font:inherit;max-width:100%}
 .hint{color:var(--muted);font-size:.85rem;margin-top:8px}
+.buildver{color:var(--muted);font-size:.75rem;text-align:right;margin:28px 2px 0;opacity:.6}
 </style>
 </head>
 <body>
@@ -247,6 +248,7 @@ input[type=file]{font:inherit;max-width:100%}
     </div>
     <p class="dcaption">Pooled incidence per 100 person-years. Circle size reflects each study's observation time; diamond width is the pooled 95% confidence interval.</p>
   </div>
+  <p class="buildver" id="buildver"></p>
 </main>
 
 <div id="overlay" class="overlay" hidden>
@@ -285,6 +287,10 @@ let data = [];          // normalised rows for the currently loaded nation (or e
 let shown = null;       // currently displayed rows
 let loadToken = 0;      // guards against a slow, superseded fetch overwriting a later one
 const $ = id => document.getElementById(id);
+
+/* Bump this string whenever the file changes, so it's visible on screen which build is loaded. */
+const BUILD_VERSION = "v1 — 2026-10-03";
+document.getElementById("buildver").textContent = "Dashboard build "+BUILD_VERSION;
 
 function authHeaders(){
   return {apikey:SUPABASE_KEY, Authorization:"Bearer "+SUPABASE_KEY, "Range-Unit":"items"};
