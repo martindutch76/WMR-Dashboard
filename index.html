@@ -157,6 +157,16 @@ summary{cursor:pointer;color:var(--muted);font-size:.9rem}
 input[type=file]{font:inherit;max-width:100%}
 .hint{color:var(--muted);font-size:.85rem;margin-top:8px}
 .buildver{color:var(--muted);font-size:.75rem;text-align:right;margin:28px 2px 0;opacity:.6}
+details.methods{margin-top:22px;border:1px solid var(--line);border-radius:10px;background:var(--panel);padding:10px 14px}
+details.methods summary{cursor:pointer;font-weight:600}
+details.methods summary span{font-weight:400;color:var(--muted);font-size:.85rem;margin-left:6px}
+.vwrap{overflow-x:auto}
+table.vtab{width:100%;min-width:640px;border-collapse:collapse;margin-top:10px;font-size:.85rem}
+.vtab th,.vtab td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top;position:static;box-shadow:none}
+.vtab .cur{font-weight:700;white-space:nowrap}
+.vtab .prov{display:inline-block;font-size:.7rem;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:0 7px;margin-left:6px;white-space:nowrap}
+.vtab .warnv{color:var(--warn);font-weight:600}
+.modal .proc{color:var(--muted);font-size:.8rem;margin:-8px 0 12px}
 .pooledhead{margin-top:16px;display:flex;flex-direction:column;gap:2px;font-size:.86rem;color:var(--muted)}
 .pooledhead strong{color:var(--ink);font-size:.98rem}
 .hetstrip{display:flex;flex-wrap:wrap;gap:4px 20px;margin:8px 2px 0;font-size:.85rem;color:var(--muted)}
@@ -316,6 +326,10 @@ table.lootab{width:100%;min-width:0;border-collapse:collapse;margin-top:8px;font
     <p class="dcaption">Pooled incidence per 100 person-years. The study rows show the current selection (the pre-specified one unless you have changed it). Circle size reflects each study's observation time; a solid diamond is the pre-specified estimate and a dashed diamond your exploratory selection, each with its 95% confidence interval as its width.</p>
     <p class="dcaption" id="fnote"></p>
   </div>
+  <details class="methods" id="methods">
+    <summary>Methods and versions <span id="methodsSummary"></span></summary>
+    <div id="methodsBody"></div>
+  </details>
   <p class="buildver" id="buildver"></p>
 </main>
 
@@ -324,6 +338,7 @@ table.lootab{width:100%;min-width:0;border-collapse:collapse;margin-top:8px;font
     <button type="button" class="close" id="mclose" aria-label="Close">&times;</button>
     <h2 id="mtitle"></h2>
     <p class="authors" id="mauthors"></p>
+    <p class="proc" id="mproc"></p>
     <div class="lblrow">
       <div class="lbl">Abstract</div>
       <a class="reflink" id="mref" href="#" target="_blank" rel="noopener" title="Open this article on PubMed" aria-label="Open this article on PubMed, opens in a new tab" hidden>
@@ -345,6 +360,8 @@ const SUPABASE_URL = "https://hqyvrfftoajdhkccvqam.supabase.co";
 const SUPABASE_KEY = "sb_publishable_gulOoDgxHgWEVgXvCXojAg_E4Jq4xFY"; // public key only. NEVER the service_role / secret key.
 const SOURCE = "incidence_dashboard";                // read-only view created by supabase_setup.sql
 const NATIONS_SOURCE = "incidence_nations";          // small distinct-nation view, also from supabase_setup.sql
+const VERSIONS_SOURCE = "prompt_versions_public";    // the versioning log (search + AI prompts), also from supabase_setup.sql
+const LOG_URL = "https://github.com/martindutch76/WhatsMyRisk/blob/main/PROMPT_VERSIONS.md";   // full history, fingerprints and notes
 const PAGE = 1000;                                   // Supabase returns at most 1000 rows per request
 const GLOBAL = "__global__";                         // sentinel nation value meaning "every nation"
 
@@ -357,7 +374,7 @@ let loadToken = 0;      // guards against a slow, superseded fetch overwriting a
 const $ = id => document.getElementById(id);
 
 /* Bump this string whenever the file changes, so it's visible on screen which build is loaded. */
-const BUILD_VERSION = "v3 — 2026-10-04";
+const BUILD_VERSION = "v4 — 2026-10-04";
 document.getElementById("buildver").textContent = "Dashboard build "+BUILD_VERSION;
 
 function authHeaders(){
@@ -375,6 +392,20 @@ async function fetchNations(){
     throw new Error(`HTTP ${res.status}${detail?": "+detail:""}`);
   }
   return (await res.json()).map(r=>r.nation).filter(Boolean);
+}
+
+/* The registered versions of the PubMed search and the AI prompts. Not
+   essential: if the view is missing or unreadable the dashboard still works and
+   the versions panel says so. */
+let methodVersions=[];
+async function fetchVersions(){
+  try{
+    const res=await fetch(`${SUPABASE_URL}/rest/v1/${VERSIONS_SOURCE}?select=*&order=artifact.asc,effective_date.asc`,
+      {headers:authHeaders()});
+    if(!res.ok) return [];
+    const rows=await res.json();
+    return Array.isArray(rows)?rows:[];
+  }catch(e){ return []; }
 }
 
 /* Fetches incidence_dashboard rows for one nation (nation=null fetches
@@ -437,6 +468,7 @@ function normalise(rows){
       rate:rateVal, lo:num(r.ci_lower_per_100py), hi:num(r.ci_upper_per_100py),
       rowType:r.row_type||null, sourceTable:r.source_table||null, rawRate:num(r.rate_value),
       sid:(r.source_id!==undefined&&r.source_id!==null)?String(r.source_id):null, extractedAt:r.extracted_at||null,
+      extractionPromptVersion:r.extraction_prompt_version||null, screeningPromptVersion:r.screening_prompt_version||null, searchVersion:r.search_version||null,
       rateSource:r.rate_source||null, casesSource:r.cases_source||null,
       pySource:r.py_source||null, ciSource:r.ci_source||null,
       notes:r.processing_notes||""
@@ -465,7 +497,8 @@ async function boot(){
   pendingState=parseHash(location.hash);
   sp.hidden=false; stt.textContent="Loading nation list…";
   try{
-    const nations=await fetchNations();
+    const [nations, versions]=await Promise.all([fetchNations(), fetchVersions()]);
+    methodVersions=versions;
     populateNationDropdown(nations);
     const want=pendingState&&pendingState.n;
     const start = (want&&(want===GLOBAL||nations.includes(want))) ? want : (nations.includes("Australia") ? "Australia" : (nations[0] ?? GLOBAL));
@@ -866,8 +899,9 @@ function buildCSV(){
     "# Your selection differs from the pre-specified selection: "+(changes?changes+" changes":"no")
   ];
   if(typeof dataStamp==="function") lines.push("# "+dataStamp());
-  lines.push(["pmid","source_table","source_id","virus","nation","population","study_year","publication_year","citation_label","incident_cases","person_years","rate_per_100py","ci_lower","ci_upper","row_type","complete_data","in_pre_specified_set","in_your_selection"].join(","));
-  allMatches.forEach(d=>lines.push([d.pmid,d.sourceTable,d.sid,d.virus,d.nation,d.pop,d.start,d.pubYear,citeLabel(d),d.cases,d.py,d.rate,d.lo,d.hi,d.rowType,d.poolable?"yes":"no",defaultSet.has(d)?"yes":"no",includedSet.has(d)?"yes":"no"].map(csvCell).join(",")));
+  if(typeof methodsLine==="function"&&methodVersions.length) lines.push("# Methods versions (current): "+methodsLine());
+  lines.push(["pmid","source_table","source_id","virus","nation","population","study_year","publication_year","citation_label","incident_cases","person_years","rate_per_100py","ci_lower","ci_upper","row_type","complete_data","in_pre_specified_set","in_your_selection","search_version","screening_prompt_version","extraction_prompt_version"].join(","));
+  allMatches.forEach(d=>lines.push([d.pmid,d.sourceTable,d.sid,d.virus,d.nation,d.pop,d.start,d.pubYear,citeLabel(d),d.cases,d.py,d.rate,d.lo,d.hi,d.rowType,d.poolable?"yes":"no",defaultSet.has(d)?"yes":"no",includedSet.has(d)?"yes":"no",d.searchVersion,d.screeningPromptVersion,d.extractionPromptVersion].map(csvCell).join(",")));
   return lines.join("\r\n")+"\r\n";
 }
 function exportCSV(){
@@ -933,9 +967,69 @@ function dataStamp(){
   const latest=data.map(d=>d.extractedAt).filter(Boolean).sort().pop();
   return "Data loaded from Supabase "+t+(latest?"; most recent extraction on record "+String(latest).slice(0,10):"");
 }
+/* ---------- versions of the search and the AI prompts ---------- */
+const ARTIFACTS=[
+  {id:"pubmed_search",              short:"PubMed search",               field:"searchVersion",          rows:r=>true},
+  {id:"screening_prompt",           short:"Screening prompt",            field:"screeningPromptVersion", rows:r=>true},
+  {id:"extraction_prompt_abstract", short:"Abstract extraction prompt",  field:"extractionPromptVersion",rows:r=>r.sourceTable==="abstract"},
+  {id:"extraction_prompt_fulltext", short:"Full-text extraction prompt", field:"extractionPromptVersion",rows:r=>r.sourceTable==="fulltext"},
+];
+const vlabel=v=>v===null||v===undefined||v===""?"not recorded":(/^\d/.test(v)?"v"+v:v);
+const currentOf=id=>methodVersions.find(v=>v.artifact===id&&v.status==="current")||null;
+function methodsLine(){
+  return ARTIFACTS.map(a=>{ const c=currentOf(a.id); return c?`${a.short} v${c.version}`:null; }).filter(Boolean).join(" \u00b7 ");
+}
+/* The versions that produced one study, for the info popup. */
+function procLine(d){
+  const ex=d.sourceTable==="fulltext"?"full-text extraction prompt":"abstract extraction prompt";
+  if(!d.searchVersion&&!d.screeningPromptVersion&&!d.extractionPromptVersion) return "Search and prompt versions were not recorded for this study.";
+  return `Processed with: PubMed search ${vlabel(d.searchVersion)} \u00b7 screening prompt ${vlabel(d.screeningPromptVersion)} \u00b7 ${ex} ${vlabel(d.extractionPromptVersion)}`;
+}
+/* How many of the loaded papers were processed under each version of one artifact. */
+function coverage(a){
+  const byVer=new Map();
+  data.filter(a.rows).forEach(r=>{
+    const v=r[a.field]||"";
+    if(!byVer.has(v)) byVer.set(v,new Set());
+    byVer.get(v).add(r.pmid||("row"+r._uid));
+  });
+  return [...byVer.entries()].map(([v,set])=>({version:v,papers:set.size}))
+    .sort((x,y)=>(parseFloat(y.version)||-1)-(parseFloat(x.version)||-1));
+}
+function renderVersions(){
+  const body=$("methodsBody"), sum=$("methodsSummary");
+  if(!methodVersions.length){
+    sum.textContent="";
+    body.innerHTML='<p class="hint">Version information is not available (the prompt_versions_public view could not be read).</p>';
+    return;
+  }
+  sum.textContent="\u2014 "+methodsLine();
+  let anyOlder=false, anyUnlogged=false;
+  const trs=ARTIFACTS.map(a=>{
+    const cur=currentOf(a.id); if(!cur) return "";
+    const known=new Map(methodVersions.filter(v=>v.artifact===a.id).map(v=>[v.version,v]));
+    const cov=coverage(a);
+    const covHtml=cov.length?cov.map(c=>{
+      const isCur=c.version===cur.version, isKnown=known.has(c.version);
+      if(!isCur) isKnown?anyOlder=true:anyUnlogged=true;
+      const note=isCur?"":(isKnown?" (earlier version)":" (not in the log)");
+      return `<div class="${isKnown?"":"warnv"}">${esc(vlabel(c.version))}: ${c.papers.toLocaleString()} ${c.papers===1?"paper":"papers"}${note}</div>`;
+    }).join(""):"<div>\u2013</div>";
+    return `<tr><td>${esc(a.short)}</td>
+      <td><span class="cur">v${esc(cur.version)}</span><span class="prov" title="How this version was recorded">${esc(cur.provenance)}</span></td>
+      <td>${esc(String(cur.effective_date))}</td>
+      <td>${esc(cur.summary)}</td><td>${covHtml}</td></tr>`;
+  }).join("");
+  body.innerHTML=`<div class="vwrap"><table class="vtab"><thead><tr><th>Step</th><th>Current version</th><th>Effective</th><th>What it does, and its last change</th><th>Papers in the data loaded</th></tr></thead><tbody>${trs}</tbody></table></div>`+
+    (anyOlder?'<p class="hint">Some loaded studies were processed under an earlier version. The log says what changed between versions.</p>':"")+
+    (anyUnlogged?'<p class="hint warnv">Some loaded studies carry a version that is not in the log (for example one run with an unregistered edit, or recorded before versioning began).</p>':"")+
+    `<p class="hint">Versions labelled <i>inferred</i> were reconstructed after the fact and are not verified against version control. Full history, fingerprints and notes: <a href="${LOG_URL}" target="_blank" rel="noopener">PROMPT_VERSIONS.md</a>.</p>`;
+}
 function stampFooter(){
-  $("buildver").textContent="Dashboard build "+BUILD_VERSION+" \u00b7 "+dataStamp();
-  $("pstamp").textContent=dataStamp()+".";
+  const m=methodVersions.length?methodsLine():"";
+  $("buildver").textContent="Dashboard build "+BUILD_VERSION+" \u00b7 "+dataStamp()+(m?" \u00b7 Methods: "+m:"");
+  $("pstamp").textContent=dataStamp()+"."+(m?" Methods: "+m+".":"");
+  renderVersions();
 }
 
 /* Draws a forest plot: one row per ticked, poolable study (a circle at its
@@ -1165,6 +1259,7 @@ function openInfo(i,trigger){
   lastTrigger=trigger;
   $("mtitle").textContent=d.title||"Title not available for this study";
   $("mauthors").innerHTML=d.authors?esc(d.authors):NA;
+  $("mproc").textContent=procLine(d);
   $("mabstract").innerHTML=d.abstract?esc(d.abstract):NA;
   const mref=$("mref");
   if(d.pmid){ mref.href=`https://pubmed.ncbi.nlm.nih.gov/${encodeURIComponent(d.pmid)}/`; mref.hidden=false; }
