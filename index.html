@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Incidence explorer</title>
+<title>Global Register of Blood Borne Virus Incidence Studies – Evidence Navigator</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -27,7 +27,8 @@ html{scroll-padding-top:env(safe-area-inset-top,0px)}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);font:400 15px/1.5 "Public Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-variant-numeric:tabular-nums}
 main{max-width:1000px;margin:0 auto;padding:28px 18px 60px}
-h1{font-size:1.5rem;font-weight:700;margin:0 0 4px;letter-spacing:-.01em}
+h1{font-size:1.5rem;font-weight:700;margin:0 0 14px;letter-spacing:-.01em;line-height:1.25}
+h1 .h1sub{display:block;font-size:1.1rem;font-weight:600;color:var(--accent);letter-spacing:0;margin-top:3px}
 .sub{color:var(--muted);margin:0 0 22px}
 .panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px}
 .controls{display:grid;grid-template-columns:minmax(180px,1fr) 2fr;gap:22px;align-items:start}
@@ -167,7 +168,14 @@ table.vtab{width:100%;min-width:640px;border-collapse:collapse;margin-top:10px;f
 .vtab .prov{display:inline-block;font-size:.7rem;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:0 7px;margin-left:6px;white-space:nowrap}
 .vtab .warnv{color:var(--warn);font-weight:600}
 .modal .proc{color:var(--muted);font-size:.8rem;margin:-8px 0 12px}
-.pooledhead{margin-top:16px;display:flex;flex-direction:column;gap:2px;font-size:.86rem;color:var(--muted)}
+.stephead{font-size:1.08rem;font-weight:700;margin:26px 2px 10px;display:flex;align-items:center;gap:4px}
+.stephead[hidden]{display:none}
+.stephead .info{margin-left:2px}
+.stephead.resulthead{font-size:1.3rem;margin-top:38px;padding-top:18px;border-top:2px solid var(--line)}
+.helpmodal{padding-bottom:22px;overflow:auto}
+.helpmodal p{margin:0 0 12px}
+.helpmodal p:last-child{margin-bottom:0}
+.pooledhead{margin-top:6px;display:flex;flex-direction:column;gap:2px;font-size:.86rem;color:var(--muted)}
 .pooledhead strong{color:var(--ink);font-size:.98rem}
 .hetstrip{display:flex;flex-wrap:wrap;gap:4px 20px;margin:8px 2px 0;font-size:.85rem;color:var(--muted)}
 .hetstrip b{color:var(--ink);font-weight:600;margin-right:4px}
@@ -199,10 +207,10 @@ table.lootab{width:100%;min-width:0;border-collapse:collapse;margin-top:8px;font
 </head>
 <body>
 <main>
-  <h1>Incidence explorer</h1>
-  <p class="sub">Filter incident HIV, HBV and HCV rates by nation and study period.</p>
+  <h1>Global Register of Blood Borne Virus Incidence Studies<span class="h1sub">Evidence Navigator</span></h1>
   <p class="status" id="status" role="status"><span class="spinner" id="spinner" aria-hidden="true"></span><span id="statustext">Loading data…</span></p>
 
+  <h2 class="stephead" id="step1head">Step 1: Select Filters</h2>
   <div class="filterwrap">
     <button type="button" class="fbar" id="ftoggle" aria-expanded="false" aria-controls="fpanel">
       <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
@@ -231,12 +239,14 @@ table.lootab{width:100%;min-width:0;border-collapse:collapse;margin-top:8px;font
     </div></div>
   </div>
 
+  <h2 class="stephead" id="step2head">Step 2: Select Virus</h2>
   <div class="virusbar" role="tablist" aria-label="Virus">
     <button type="button" role="tab" aria-selected="true" data-virus="HBV">HBV</button>
     <button type="button" role="tab" aria-selected="false" data-virus="HCV">HCV</button>
     <button type="button" role="tab" aria-selected="false" data-virus="HIV">HIV</button>
   </div>
 
+  <h2 class="stephead" id="step3head">Step 3: Select studies <button type="button" class="info" id="step3Info" title="How to select studies" aria-label="Information about selecting studies" aria-haspopup="dialog"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><circle cx="10" cy="10" r="8.5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M7.6 7.9c0-1.4 1-2.3 2.5-2.3s2.4.8 2.4 2c0 1.7-2.1 1.7-2.1 3.3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><circle cx="10.3" cy="14.3" r="1" fill="currentColor"/></svg></button></h2>
   <div class="count" aria-live="polite">
     <strong id="n">0</strong><span class="t" id="ntext">Populations Found</span>
   </div>
@@ -245,7 +255,7 @@ table.lootab{width:100%;min-width:0;border-collapse:collapse;margin-top:8px;font
     <table>
       <thead>
         <tr>
-          <th style="width:64px"><span class="incHead">Include<br><input type="checkbox" id="incAll" checked title="Tick: restore the pre-specified selection for the listed rows. Untick: clear every listed row." aria-label="Restore the pre-specified selection for the listed rows, or clear them all"></span></th>
+          <th style="width:64px"><span class="incHead">Include<br><input type="checkbox" id="incAll" checked title="Tick: restore the baseline selection for the listed rows. Untick: clear every listed row." aria-label="Restore the baseline selection for the listed rows, or clear them all"></span></th>
           <th>Study period</th>
           <th>Population</th>
           <th class="num">Rate per 100 PY</th>
@@ -258,51 +268,23 @@ table.lootab{width:100%;min-width:0;border-collapse:collapse;margin-top:8px;font
       <tbody id="rows"></tbody>
     </table>
   </section>
-  <p class="hint">The tick boxes let you explore how the pooled estimate responds to adding or removing studies. They never change the pre-specified estimate below, and any change is shown separately as exploratory. A paper contributes at most one row per virus to an estimate, so ticking one of its rows replaces the others; rows for a different virus (on that virus's own tab) are unaffected.</p>
-
-  <div class="pooledhead">
-    <strong>Pre-specified estimate</strong>
-    <span>Every eligible paper for the filters above, one row per paper (the overall row where there is one, otherwise the row with the most person-years). It does not change when you tick or untick studies. <span id="pstamp"></span></span>
-  </div>
+  <h2 class="stephead resulthead" id="resultshead">Results</h2>
+  <div class="pooledhead"><strong>Baseline Estimate</strong></div>
   <section class="pooled" aria-live="polite">
     <div class="cell"><div class="h">Pooled Incidence</div><div class="v" id="pi">–</div><div class="ci2" id="pci"></div><div class="u">per 100 person-years</div></div>
     <div class="cell"><div class="h">Pooled Incident Cases</div><div class="v" id="pc">–</div><div class="u">new infections</div></div>
     <div class="cell"><div class="h">Pooled Observation Period (Person Years)</div><div class="v" id="pp">–</div><div class="u">person-years</div></div>
   </section>
+  <p class="hint" id="pdesc">Every eligible paper for the filters above, one row per paper (the overall row where there is one, otherwise the row with the most person-years). It does not change when you tick or untick studies. <span id="pstamp"></span></p>
   <div class="hetstrip" id="hetstrip"></div>
   <p class="hint" id="pnote"></p>
-
-  <section class="explore" id="explore" hidden aria-live="polite">
-    <div class="exh">
-      <strong>Your selection <span class="tag">exploratory</span></strong>
-      <span class="exchanges" id="exchanges"></span>
-      <button type="button" class="btn" id="resetSel">Reset to pre-specified</button>
-    </div>
-    <div class="exgrid">
-      <div><div class="k">Pooled incidence (per 100 PY)</div><div class="v" id="epi">–</div><div class="ci2" id="epci"></div></div>
-      <div><div class="k">Incident cases</div><div class="v2" id="epc">–</div></div>
-      <div><div class="k">Person-years</div><div class="v2" id="epp">–</div></div>
-    </div>
-    <div class="hetstrip" id="enote"></div>
-    <p class="hint">Choosing which studies to include after seeing the results is a post-hoc analysis. Use it to explore, and report the pre-specified estimate as the headline figure.</p>
-  </section>
-
-  <div class="actions">
-    <button type="button" class="btn" id="exportBtn">Download studies and selection (CSV)</button>
-    <button type="button" class="btn" id="copyLink">Copy link to this view</button><span class="copymsg" id="copyMsg" role="status"></span>
-  </div>
-
-  <details class="loo" id="loo" hidden>
-    <summary>Leave-one-out sensitivity of the pre-specified estimate</summary>
-    <div id="lootable"></div>
-  </details>
 
   <div class="forestwrap" id="forestwrap" hidden>
     <div class="fstudies" id="fstudies"></div>
     <div class="frow ftotal" id="ftotalrow">
-      <div class="flabel th" id="ftotallabel">Pre-specified estimate</div>
+      <div class="flabel th" id="ftotallabel">Baseline estimate</div>
       <div class="fplot">
-        <svg class="diamond" id="diamondSvg" viewBox="0 0 1000 28" preserveAspectRatio="none" role="img" aria-label="Pre-specified pooled incidence and its 95% confidence interval, shown as a diamond on the same scale as the studies above">
+        <svg class="diamond" id="diamondSvg" viewBox="0 0 1000 28" preserveAspectRatio="none" role="img" aria-label="Baseline pooled incidence and its 95% confidence interval, shown as a diamond on the same scale as the studies above">
           <polygon id="diamondShape" points="" fill="var(--accent)" stroke="var(--whisker)" stroke-width="1" vector-effect="non-scaling-stroke"/>
         </svg>
       </div>
@@ -323,9 +305,35 @@ table.lootab{width:100%;min-width:0;border-collapse:collapse;margin-top:8px;font
       <div class="flabel"></div>
       <div class="fplot fnums"><span>0</span><span id="diamondMax"></span></div>
     </div>
-    <p class="dcaption">Pooled incidence per 100 person-years. The study rows show the current selection (the pre-specified one unless you have changed it). Circle size reflects each study's observation time; a solid diamond is the pre-specified estimate and a dashed diamond your exploratory selection, each with its 95% confidence interval as its width.</p>
+    <p class="dcaption">Pooled incidence per 100 person-years. The study rows, listed alphabetically by first author, show the current selection (the baseline one unless you have changed it). Circle size reflects each study's observation time; a solid diamond is the baseline estimate and a dashed diamond your exploratory selection, each with its 95% confidence interval as its width.</p>
     <p class="dcaption" id="fnote"></p>
   </div>
+
+  <div class="actions">
+    <button type="button" class="btn" id="exportBtn">Download studies and selection (CSV)</button>
+    <button type="button" class="btn" id="copyLink">Copy link to this view</button><span class="copymsg" id="copyMsg" role="status"></span>
+  </div>
+
+  <h2 class="stephead" id="step4head">Step 4 (Optional): Perform a sensitivity analysis</h2>
+  <section class="explore" id="explore" hidden aria-live="polite">
+    <div class="exh">
+      <strong>Your selection <span class="tag">exploratory</span></strong>
+      <span class="exchanges" id="exchanges"></span>
+      <button type="button" class="btn" id="resetSel">Reset to baseline</button>
+    </div>
+    <div class="exgrid">
+      <div><div class="k">Pooled incidence (per 100 PY)</div><div class="v" id="epi">–</div><div class="ci2" id="epci"></div></div>
+      <div><div class="k">Incident cases</div><div class="v2" id="epc">–</div></div>
+      <div><div class="k">Person-years</div><div class="v2" id="epp">–</div></div>
+    </div>
+    <div class="hetstrip" id="enote"></div>
+    <p class="hint">Choosing which studies to include after seeing the results is a post-hoc analysis. Use it to explore, and report the baseline estimate as the headline figure.</p>
+  </section>
+
+  <details class="loo" id="loo" hidden>
+    <summary>Leave-one-out sensitivity of the baseline estimate</summary>
+    <div id="lootable"></div>
+  </details>
   <details class="methods" id="methods">
     <summary>Methods and versions <span id="methodsSummary"></span></summary>
     <div id="methodsBody"></div>
@@ -354,6 +362,16 @@ table.lootab{width:100%;min-width:0;border-collapse:collapse;margin-top:8px;font
     </div>
   </div>
 </div>
+<div id="helpOverlay" class="overlay" hidden>
+  <div class="modal helpmodal" role="dialog" aria-modal="true" aria-labelledby="htitle">
+    <button type="button" class="close" id="hclose" aria-label="Close">&times;</button>
+    <h2 id="htitle">Selecting Studies for Pooled Incidence Estimates</h2>
+    <p>Each population or subpopulation within the Global Register, based on your filters, is listed in this table.</p>
+    <p>The baseline estimate is based on a single overall population reported for each included published paper. Only papers that report incidence rates, incident numbers and observed periods can be used for baseline or exploratory estimates of pooled incidence.</p>
+    <p>You can choose to select alternative populations to better model your target population. Choosing an alternative deselects all other populations reported in the paper to limit double counting of individual incident cases.</p>
+    <p>Selection of individual papers and populations only applies to the specific virus currently being navigated.</p>
+  </div>
+</div>
 <script>
 /* ---------- Supabase connection: edit these two values ---------- */
 const SUPABASE_URL = "https://hqyvrfftoajdhkccvqam.supabase.co";
@@ -374,7 +392,7 @@ let loadToken = 0;      // guards against a slow, superseded fetch overwriting a
 const $ = id => document.getElementById(id);
 
 /* Bump this string whenever the file changes, so it's visible on screen which build is loaded. */
-const BUILD_VERSION = "v4 — 2026-10-04";
+const BUILD_VERSION = "v5 — 2026-10-05";
 document.getElementById("buildver").textContent = "Dashboard build "+BUILD_VERSION;
 
 function authHeaders(){
@@ -505,7 +523,7 @@ async function boot(){
     $("nation").value=start;
     await loadNation(start);
   } catch(e){
-    sp.hidden=true; stt.textContent="Could not load the nation list from Supabase ("+e.message+"). Check the URL and key, and that the view exists and the anon role can read it.";
+    sp.hidden=true; stt.textContent="Could not load the nation list from the Global Register ("+e.message+"). Check the URL and key, and that the view exists and the anon role can read it.";
     st.classList.add("err");
   }
 }
@@ -534,7 +552,7 @@ async function loadNation(nation){
     loadedAt=new Date(); stampFooter();
   } catch(e){
     if(myToken!==loadToken) return;
-    sp.hidden=true; stt.textContent="Could not load data from Supabase ("+e.message+"). Check the URL and key, that the view exists, and that the anon role can read it.";
+    sp.hidden=true; stt.textContent="Could not load data from the Global Register ("+e.message+"). Check the URL and key, that the view exists, and that the anon role can read it.";
     st.classList.add("err");
   } finally {
     if(myToken===loadToken) $("nation").disabled=false;
@@ -562,7 +580,10 @@ const selectedRisks=()=>[...document.querySelectorAll("#rgrid input:checked")].m
    resets the year sliders to fit whatever was just loaded). */
 function applyLoadedDataset(){
   const ys=data.map(d=>d.start), ye=data.map(d=>d.end);
-  const lo=ys.length?Math.min(...ys,...ye):0, hi=ys.length?Math.max(...ys,...ye):0;
+  // The end of the range is always the current year (up to the present), whether or not
+  // the register holds papers from this year; the start is the earliest year in the data.
+  const thisYear=new Date().getFullYear();
+  const lo=ys.length?Math.min(...ys,...ye):thisYear, hi=Math.max(thisYear,...ys,...ye);
   [$("ys"),$("ye")].forEach(el=>{el.min=lo;el.max=hi;});
   $("ys").value=lo; $("ye").value=hi;
   applyPendingState();
@@ -762,8 +783,8 @@ function fitPooledIncidence(ok){
     tau:fit.tau, i2:approxI2(studies,fit.tau), pi, method:"glmm"};
 }
 
-/* ---------- pre-specified selection vs. the user's exploratory changes ----------
-   The pre-specified estimate pools every eligible matching paper, one row per
+/* ---------- baseline selection vs. the user's exploratory changes ----------
+   The baseline estimate pools every eligible matching paper, one row per
    paper and virus, chosen by a fixed rule (the "overall" row where there is
    one, otherwise the row with the most person-years). It never depends on the
    tick boxes. Ticking or unticking rows creates a separate, clearly labelled
@@ -821,7 +842,7 @@ function poolNow(){
     $("hetstrip").innerHTML="";
     $("pnote").textContent=!allMatches.length?"No studies match these filters, so nothing can be pooled."
       :"None of the matching studies has a complete rate, case count and person-years, so nothing can be pooled.";
-    $("explore").hidden=true; $("forestwrap").hidden=true; $("loo").hidden=true;
+    $("explore").hidden=true; $("forestwrap").hidden=true; $("loo").hidden=true; $("step4head").hidden=true;
     return;
   }
   const head=fitPooledIncidence(headRows);
@@ -833,14 +854,24 @@ function poolNow(){
   $("pp").textContent=Math.round(sum(headRows,"py")).toLocaleString();
   $("hetstrip").innerHTML=hetHtml(head);
   const k=headRows.length;
-  const flag=head.method!=="glmm"?` The interval shown is an exact Poisson interval on the pooled total instead (${head.method}).`:"";
-  const more=allMatches.length>MAX?` Estimates use all ${allMatches.length.toLocaleString()} matching populations, not only the ${MAX} listed above.`:"";
-  $("pnote").textContent=`Random-effects Poisson GLMM across ${k} ${k===1?"paper":"papers"}, one row per paper. Incident cases and person-years are simple totals.`+flag+more;
+  const pap=k===1?"paper":"papers", was=k===1?"was":"were";
+  const lead=`${k} ${pap} which met the filter criteria, and had a complete set of incidence rate, incident count and observation time within the Global Register, ${was} analysed`;
+  let note;
+  if(head.method==="glmm") note=`${lead} using a random-effects Poisson GLMM.`;
+  else {
+    const why=head.method==="single study" ? "a random-effects model needs at least two papers"
+            : head.method.startsWith("zero events") ? "no incident cases were reported"
+            : "the model's uncertainty could not be estimated";
+    note=`${lead}. Because ${why}, an exact Poisson interval on the pooled total is shown.`;
+  }
+  const more=allMatches.length>MAX?` The table lists the ${MAX} most recent of ${allMatches.length.toLocaleString()} matching populations; the estimate draws on every paper with a complete set, not only those listed.`:"";
+  $("pnote").textContent=note+more;
+  $("step4head").hidden=false;
 
   if(!modified){ $("explore").hidden=true; }
   else {
     $("explore").hidden=false;
-    $("exchanges").textContent=`${changes} ${changes===1?"change":"changes"} from the pre-specified selection`;
+    $("exchanges").textContent=`${changes} ${changes===1?"change":"changes"} from the baseline selection`;
     if(sel){
       $("epi").textContent=fmt(sel.rate);
       $("epci").textContent="95% CI "+fmt(sel.lo)+" to "+fmt(sel.hi);
@@ -857,14 +888,14 @@ function poolNow(){
   if($("loo").open) renderLOO(headRows);
 }
 
-/* Leave-one-out sensitivity on the pre-specified set: refit the GLMM with each
+/* Leave-one-out sensitivity on the baseline set: refit the GLMM with each
    paper omitted in turn. Limited to 30 or fewer papers to keep it fast. */
 let looCache={key:"",html:""};
 function renderLOO(rows){
   const box=$("lootable"), k=rows.length;
   if(k<3){ box.innerHTML=`<p class="hint">Leave-one-out needs at least 3 papers (this estimate pools ${k}).</p>`; return; }
   if(k>30){ box.innerHTML=`<p class="hint">Leave-one-out is shown when 30 or fewer papers are pooled (this estimate pools ${k}). Narrow the filters to use it.</p>`; return; }
-  // It depends only on the pre-specified set, which ticking never changes, so keep the last result
+  // It depends only on the baseline set, which ticking never changes, so keep the last result
   // (keyed by the set's content) instead of refitting every paper on each tick.
   const key=rows.map(d=>d._uid+":"+d.cases+":"+d.py).sort().join("|");
   if(looCache.key===key){ box.innerHTML=looCache.html; return; }
@@ -875,12 +906,12 @@ function renderLOO(rows){
   }).sort((a,b)=>Math.abs(b.chg)-Math.abs(a.chg));
   const html=`<table class="lootab"><thead><tr><th>Paper left out</th><th class="num">Pooled rate without it (95% CI)</th><th class="num">Change</th></tr></thead><tbody>`+
     out.map(o=>`<tr><td>${esc(citeLabel(o.d))}</td><td class="num">${fmt(o.f.rate)} (${fmt(o.f.lo)} to ${fmt(o.f.hi)})</td><td class="num">${o.chg>=0?"+":""}${o.chg.toFixed(0)}%</td></tr>`).join("")+
-    `</tbody></table><p class="hint">Pre-specified estimate with every paper: ${fmt(full.rate)} (${fmt(full.lo)} to ${fmt(full.hi)}). Sorted by influence.</p>`;
+    `</tbody></table><p class="hint">Baseline estimate with every paper: ${fmt(full.rate)} (${fmt(full.lo)} to ${fmt(full.hi)}). Sorted by influence.</p>`;
   looCache={key,html};
   box.innerHTML=html;
 }
 
-/* CSV of every matching row with its membership of the pre-specified set and of
+/* CSV of every matching row with its membership of the baseline set and of
    the current selection, plus the filters and estimate, so a result can be reproduced. */
 function csvCell(v){
   if(v===null||v===undefined) return "";
@@ -895,12 +926,12 @@ function buildCSV(){
     "# Incidence dashboard export, build "+BUILD_VERSION,
     "# Filters: "+$("fsum").textContent+", virus "+virus,
     "# Exported: "+new Date().toISOString(),
-    "# Pre-specified estimate (random-effects Poisson GLMM, one row per paper): "+(head?`${fmt(head.rate)} per 100 PY (95% CI ${fmt(head.lo)} to ${fmt(head.hi)}) from ${head.k} papers`:"none"),
-    "# Your selection differs from the pre-specified selection: "+(changes?changes+" changes":"no")
+    "# Baseline estimate (random-effects Poisson GLMM, one row per paper): "+(head?`${fmt(head.rate)} per 100 PY (95% CI ${fmt(head.lo)} to ${fmt(head.hi)}) from ${head.k} papers`:"none"),
+    "# Your selection differs from the baseline selection: "+(changes?changes+" changes":"no")
   ];
   if(typeof dataStamp==="function") lines.push("# "+dataStamp());
   if(typeof methodsLine==="function"&&methodVersions.length) lines.push("# Methods versions (current): "+methodsLine());
-  lines.push(["pmid","source_table","source_id","virus","nation","population","study_year","publication_year","citation_label","incident_cases","person_years","rate_per_100py","ci_lower","ci_upper","row_type","complete_data","in_pre_specified_set","in_your_selection","search_version","screening_prompt_version","extraction_prompt_version"].join(","));
+  lines.push(["pmid","source_table","source_id","virus","nation","population","study_year","publication_year","citation_label","incident_cases","person_years","rate_per_100py","ci_lower","ci_upper","row_type","complete_data","in_baseline_set","in_your_selection","search_version","screening_prompt_version","extraction_prompt_version"].join(","));
   allMatches.forEach(d=>lines.push([d.pmid,d.sourceTable,d.sid,d.virus,d.nation,d.pop,d.start,d.pubYear,citeLabel(d),d.cases,d.py,d.rate,d.lo,d.hi,d.rowType,d.poolable?"yes":"no",defaultSet.has(d)?"yes":"no",includedSet.has(d)?"yes":"no",d.searchVersion,d.screeningPromptVersion,d.extractionPromptVersion].map(csvCell).join(",")));
   return lines.join("\r\n")+"\r\n";
 }
@@ -965,7 +996,7 @@ function applyPendingState(){
 function dataStamp(){
   const t=loadedAt?loadedAt.toLocaleString(undefined,{dateStyle:"medium",timeStyle:"short"}):"";
   const latest=data.map(d=>d.extractedAt).filter(Boolean).sort().pop();
-  return "Data loaded from Supabase "+t+(latest?"; most recent extraction on record "+String(latest).slice(0,10):"");
+  return "Data loaded from the Global Register on "+t+(latest?"; most recent extraction on record "+String(latest).slice(0,10):"");
 }
 /* ---------- versions of the search and the AI prompts ---------- */
 const ARTIFACTS=[
@@ -1066,16 +1097,27 @@ function citeLabel(d){
   return "(Source unknown)";
 }
 
+/* Alphabetical by the first author's surname; papers with no recorded author go last,
+   and two papers by the same first author are ordered by year. */
+function authorSort(a,b){
+  const sa=surnameFromAuthors(a.authors), sb=surnameFromAuthors(b.authors);
+  if(!sa!==!sb) return sa?-1:1;
+  const c=sa.localeCompare(sb,undefined,{sensitivity:"base"});
+  if(c) return c;
+  const ya=a.pubYear??a.start??0, yb=b.pubYear??b.start??0;
+  return (ya-yb) || String(a.pop||"").localeCompare(String(b.pop||""));
+}
+
 function drawForest(head, sel, headRows, selRows, modified){
   const wrap=$("forestwrap");
   // The study rows always show the current selection. The axis is scaled to the
-  // studies being pooled (and, when modified, the pre-specified set as well).
+  // studies being pooled (and, when modified, the baseline set as well).
   const axisRows=modified?selRows.concat(headRows):selRows;
   const axisMax=Math.max(0,...axisRows.map(d=>d.hi??d.rate??0));
   if(!(axisMax>0) || !(headRows.length||selRows.length)){ wrap.hidden=true; return; }
   wrap.hidden=false;
   const pct=v=>Math.max(0,Math.min(v,axisMax))/axisMax*100;
-  const listed=selRows.slice(0,MAX_FOREST);
+  const listed=selRows.slice(0,MAX_FOREST).sort(authorSort);   // the most recent MAX_FOREST, shown alphabetically
   const maxPy=Math.max(0,...listed.map(d=>d.py||0)) || 1;
   const R_MIN=3, R_MAX=7;
 
@@ -1104,8 +1146,8 @@ function drawForest(head, sel, headRows, selRows, modified){
   const plural=n=>`${n} ${n===1?"paper":"papers"}`;
   if(head){
     $("ftotalrow").hidden=false;
-    diamond($("diamondShape"),$("diamondSvg"),head,null,headRows.length,"Pre-specified estimate");
-    $("ftotallabel").textContent=`Pre-specified (${plural(headRows.length)})`; $("ftotallabel").title=`Pre-specified estimate (${plural(headRows.length)})`;
+    diamond($("diamondShape"),$("diamondSvg"),head,null,headRows.length,"Baseline estimate");
+    $("ftotallabel").textContent=`Baseline (${plural(headRows.length)})`; $("ftotallabel").title=`Baseline estimate (${plural(headRows.length)})`;
   } else $("ftotalrow").hidden=true;
   if(modified && sel){
     $("ftotalrow2").hidden=false;
@@ -1222,7 +1264,7 @@ function syncIncAll(){
   const nInc=eligible.filter(d=>includedSet.has(d)).length;
   const same=eligible.every(d=>includedSet.has(d)===defaultSet.has(d));
   box.indeterminate=false;
-  if(same) box.checked=true;                       // listed rows match the pre-specified selection
+  if(same) box.checked=true;                       // listed rows match the baseline selection
   else if(nInc===0) box.checked=false;             // every listed row cleared
   else { box.checked=false; box.indeterminate=true; }
 }
@@ -1293,7 +1335,7 @@ $("rows").addEventListener("change",e=>{
 });
 $("incAll").addEventListener("change",()=>{
   const eligible=(shown||[]).filter(d=>d.poolable);
-  if($("incAll").checked){ eligible.forEach(d=>{ d.override=undefined; d.ovAt=0; }); }   // restore the pre-specified selection
+  if($("incAll").checked){ eligible.forEach(d=>{ d.override=undefined; d.ovAt=0; }); }   // restore the baseline selection
   else { eligible.forEach(d=>{ d.override=false; d.ovAt=++ovCounter; }); }              // clear every listed row
   renderRows(); writeHash();
 });
@@ -1301,6 +1343,13 @@ $("rows").addEventListener("click",e=>{const b=e.target.closest(".info"); if(b) 
 $("mclose").addEventListener("click",closeInfo);
 $("overlay").addEventListener("click",e=>{if(e.target===$("overlay")) closeInfo();});
 document.addEventListener("keydown",e=>{if(e.key==="Escape"&&!$("overlay").hidden) closeInfo();});
+/* Step 3 help pop-up */
+function openHelp(trigger){ lastTrigger=trigger||null; $("helpOverlay").hidden=false; $("hclose").focus(); }
+function closeHelp(){ $("helpOverlay").hidden=true; if(lastTrigger) lastTrigger.focus(); }
+$("step3Info").addEventListener("click",e=>openHelp(e.currentTarget));
+$("hclose").addEventListener("click",closeHelp);
+$("helpOverlay").addEventListener("click",e=>{if(e.target===$("helpOverlay")) closeHelp();});
+document.addEventListener("keydown",e=>{if(e.key==="Escape"&&!$("helpOverlay").hidden) closeHelp();});
 
 /* ---------- selection, reset, export ---------- */
 $("resetSel").addEventListener("click",()=>{
